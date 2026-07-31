@@ -8,10 +8,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['app-icon.svg'],
+      includeAssets: ['app-icon.svg', 'app-icon-180.png', 'app-icon-192.png', 'app-icon-512.png'],
       manifest: {
-        name: '甜心学习工作台',
-        short_name: '学习工作台',
+        name: '甜心工作台',
+        short_name: '甜心工作台',
         description: '适合一升二年级女孩的每日学习、运动与积分工作台',
         lang: 'zh-CN',
         theme_color: '#f88fb5',
@@ -23,10 +23,22 @@ export default defineConfig({
         scope: './',
         icons: [
           {
+            src: 'app-icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'app-icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
             src: 'app-icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
+            purpose: 'any'
           }
         ]
       },

@@ -94,7 +94,7 @@ export default function App() {
       <aside className="side-nav" aria-label="学习导航">
         <div className="brand">
           <img src={characterImages["hello-kitty"]} alt="" />
-          <span>粉粉学习台</span>
+          <span>甜心工作台</span>
         </div>
         <nav>
           {sectionKeys.map((key) => (
