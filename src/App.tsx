@@ -173,7 +173,7 @@ function SectionPage({ view, completedIds, onOpenTask, onBack }: { view: TaskCat
   const meta = sectionMeta[view];
 
   return (
-    <section>
+    <section className="page-with-back">
       <BackButton onBack={onBack} />
       <div className="section-title">
         <img src={characterImages[meta.character]} alt="" />
@@ -215,7 +215,7 @@ function TaskGrid({ tasks, completedIds, onOpenTask, onDone }: { tasks: TaskDefi
 
 function TaskPage({ task, completed, onBack, onDone, dateKey }: { task: TaskDefinition; completed: boolean; onBack: () => void; onDone: () => void; dateKey: string }) {
   return (
-    <section>
+    <section className="page-with-back">
       <BackButton onBack={onBack} />
       <div className="task-head">
         <img src={characterImages[task.character]} alt="" />
@@ -518,7 +518,7 @@ function ShopPage({ state, setState, onBack, streak }: { state: WorkspaceState; 
   };
 
   return (
-    <section>
+    <section className="page-with-back">
       <BackButton onBack={onBack} />
       <div className="section-title">
         <ShoppingBag size={42} />

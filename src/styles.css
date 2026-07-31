@@ -274,7 +274,16 @@ button {
 }
 
 .back-button {
-  margin-bottom: 12px;
+  position: fixed;
+  top: 78px;
+  left: calc(216px + 22px);
+  z-index: 8;
+  margin: 0;
+  box-shadow: 0 4px 12px rgba(75, 52, 64, 0.14);
+}
+
+.page-with-back {
+  padding-top: 48px;
 }
 
 .panel-list {
@@ -483,6 +492,15 @@ textarea {
 
   .main-area {
     padding: 12px 10px 24px;
+  }
+
+  .back-button {
+    top: 116px;
+    left: 88px;
+  }
+
+  .page-with-back {
+    padding-top: 52px;
   }
 
   .top-bar {
