@@ -53,12 +53,12 @@ const generateArithmetic = (seedText: string): ArithmeticQuestion[] => {
   return Array.from({ length: 60 }, (_, index) => {
     const isAdd = index % 3 !== 1;
     if (isAdd) {
-      const a = next() % 70;
-      const b = next() % (100 - a);
+      const a = 1 + (next() % 99);
+      const b = 1 + (next() % (100 - a));
       return { prompt: `${a} + ${b} =`, answer: a + b };
     }
-    const a = 20 + (next() % 80);
-    const b = next() % (a + 1);
+    const a = 2 + (next() % 99);
+    const b = 1 + (next() % (a - 1));
     return { prompt: `${a} - ${b} =`, answer: a - b };
   });
 };

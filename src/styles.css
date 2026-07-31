@@ -286,6 +286,11 @@ button {
   padding-top: 48px;
 }
 
+.page-with-back .section-title,
+.page-with-back .task-head {
+  margin-left: 124px;
+}
+
 .panel-list {
   display: grid;
   gap: 12px;
@@ -501,6 +506,11 @@ textarea {
 
   .page-with-back {
     padding-top: 52px;
+  }
+
+  .page-with-back .section-title,
+  .page-with-back .task-head {
+    margin-left: 110px;
   }
 
   .top-bar {
