@@ -107,17 +107,17 @@ export default function App() {
       </aside>
 
       <main className="main-area">
-        <TopBar points={state.points} progress={progress} completedCount={completedCount} streak={streak} />
+        <TopBar points={state.points} progress={progress} completedCount={completedCount} streak={streak} onBack={route.view === "home" ? undefined : () => navigate("home")} />
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} onBack={() => setRoute({ view: currentTask.category })} onDone={() => markTaskDone(currentTask)} dateKey={state.dateKey} />
+          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} onDone={() => markTaskDone(currentTask)} dateKey={state.dateKey} />
         ) : route.view === "home" ? (
           <HomePage completedIds={state.completedTaskIds} onOpenTask={openTask} onDone={markTaskDone} />
         ) : route.view === "shop" ? (
-          <ShopPage state={state} setState={setState} onBack={() => navigate("home")} streak={streak} />
+          <ShopPage state={state} setState={setState} streak={streak} />
         ) : (
-          <SectionPage view={route.view} completedIds={state.completedTaskIds} onOpenTask={openTask} onBack={() => navigate("home")} />
+          <SectionPage view={route.view} completedIds={state.completedTaskIds} onOpenTask={openTask} />
         )}
       </main>
 
@@ -135,12 +135,15 @@ export default function App() {
   );
 }
 
-function TopBar({ points, progress, completedCount, streak }: { points: number; progress: number; completedCount: number; streak: number }) {
+function TopBar({ points, progress, completedCount, streak, onBack }: { points: number; progress: number; completedCount: number; streak: number; onBack?: () => void }) {
   return (
     <header className="top-bar">
-      <div>
-        <p className="eyebrow">一升二预习工作台</p>
-        <h1>江苏二年级上册预习</h1>
+      <div className="top-bar-left">
+        {onBack ? <BackButton onBack={onBack} /> : null}
+        <div>
+          <p className="eyebrow">一升二预习工作台</p>
+          <h1>江苏二年级上册预习</h1>
+        </div>
       </div>
       <div className="stats">
         <span><Star size={18} />{points} 积分</span>
@@ -168,13 +171,12 @@ function HomePage({ completedIds, onOpenTask, onDone }: { completedIds: string[]
   );
 }
 
-function SectionPage({ view, completedIds, onOpenTask, onBack }: { view: TaskCategory; completedIds: string[]; onOpenTask: (taskId: string) => void; onBack: () => void }) {
+function SectionPage({ view, completedIds, onOpenTask }: { view: TaskCategory; completedIds: string[]; onOpenTask: (taskId: string) => void }) {
   const tasks = taskCatalog.filter((task) => task.category === view);
   const meta = sectionMeta[view];
 
   return (
-    <section className="page-with-back">
-      <BackButton onBack={onBack} />
+    <section>
       <div className="section-title">
         <img src={characterImages[meta.character]} alt="" />
         <div>
@@ -213,10 +215,9 @@ function TaskGrid({ tasks, completedIds, onOpenTask, onDone }: { tasks: TaskDefi
   );
 }
 
-function TaskPage({ task, completed, onBack, onDone, dateKey }: { task: TaskDefinition; completed: boolean; onBack: () => void; onDone: () => void; dateKey: string }) {
+function TaskPage({ task, completed, onDone, dateKey }: { task: TaskDefinition; completed: boolean; onDone: () => void; dateKey: string }) {
   return (
-    <section className="page-with-back">
-      <BackButton onBack={onBack} />
+    <section>
       <div className="task-head">
         <img src={characterImages[task.character]} alt="" />
         <div>
@@ -427,7 +428,7 @@ function Arithmetic({ dateKey }: { dateKey: string }) {
       <div className="arithmetic-grid">
         {questions.map((question, index) => (
           <label key={`${question.prompt}-${index}`}>
-            <span>{index + 1}. {question.prompt}</span>
+            <span>{question.prompt}</span>
             <input inputMode="numeric" value={answers[index] ?? ""} onChange={(event) => setAnswers({ ...answers, [index]: event.target.value })} />
             {checked ? <b>{question.answer}</b> : null}
           </label>
@@ -511,15 +512,14 @@ function SimplePractice({ title, items }: { title: string; items: string[][] }) 
   );
 }
 
-function ShopPage({ state, setState, onBack, streak }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; onBack: () => void; streak: number }) {
+function ShopPage({ state, setState, streak }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; streak: number }) {
   const redeem = (reward: (typeof shopRewards)[number]) => {
     const next = redeemReward(state, { id: reward.id, name: reward.name, cost: reward.costStars });
     if (next) setState(next);
   };
 
   return (
-    <section className="page-with-back">
-      <BackButton onBack={onBack} />
+    <section>
       <div className="section-title">
         <ShoppingBag size={42} />
         <div>
