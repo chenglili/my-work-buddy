@@ -1,6 +1,5 @@
 export const STORAGE_KEY = 'my-work-buddy-state-v2';
 export const LEGACY_STORAGE_KEY = 'my-work-buddy-state-v1';
-export const DEFAULT_PARENT_PIN = '2580';
 
 export interface TaskResult {
   taskId: string;
@@ -9,7 +8,18 @@ export interface TaskResult {
   durationSeconds: number;
   attempts: number;
   wrongQuestions: string[];
+  evidence?: string;
   completedAt: string;
+}
+
+export interface PendingTaskReview {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  points: number;
+  dateKey: string;
+  result: CompletionResultInput;
+  submittedAt: string;
 }
 
 export type RewardRequestStatus = 'pending' | 'approved' | 'fulfilled';
@@ -25,10 +35,6 @@ export interface RewardRequest {
   fulfilledAt?: string;
 }
 
-export interface ParentSettings {
-  pin: string;
-}
-
 export interface WorkspaceState {
   dateKey: string;
   points: number;
@@ -36,9 +42,10 @@ export interface WorkspaceState {
   bonusAwarded: boolean;
   completedDates: string[];
   taskResults: TaskResult[];
+  pendingTaskReviews: PendingTaskReview[];
   weeklyPoints: Record<string, number>;
+  dailyEarnedPoints: Record<string, number>;
   rewardRequests: RewardRequest[];
-  parentSettings: ParentSettings;
 }
 
 interface LegacyWorkspaceState {
@@ -55,6 +62,7 @@ export interface CompletionResultInput {
   durationSeconds?: number;
   attempts?: number;
   wrongQuestions?: string[];
+  evidence?: string;
 }
 
 export const dateKey = (date = new Date()) => {
@@ -78,9 +86,10 @@ export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   bonusAwarded: false,
   completedDates: [],
   taskResults: [],
+  pendingTaskReviews: [],
   weeklyPoints: {},
+  dailyEarnedPoints: {},
   rewardRequests: [],
-  parentSettings: { pin: DEFAULT_PARENT_PIN },
 });
 
 export const refreshDailyState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
@@ -92,6 +101,7 @@ export const refreshDailyState = (state: WorkspaceState, today = new Date()): Wo
     dateKey: todayKey,
     completedTaskIds: [],
     bonusAwarded: false,
+    pendingTaskReviews: [],
   };
 };
 
@@ -119,6 +129,7 @@ export const completeTask = (
     durationSeconds: result.durationSeconds ?? 0,
     attempts: result.attempts ?? 1,
     wrongQuestions: result.wrongQuestions ?? [],
+    evidence: result.evidence,
     completedAt: today.toISOString(),
   };
 
@@ -135,7 +146,72 @@ export const completeTask = (
       ...freshState.weeklyPoints,
       [currentWeek]: (freshState.weeklyPoints[currentWeek] ?? 0) + awardedPoints,
     },
+    dailyEarnedPoints: {
+      ...freshState.dailyEarnedPoints,
+      [todayKey]: (freshState.dailyEarnedPoints[todayKey] ?? 0) + awardedPoints,
+    },
   };
+};
+
+export const submitTaskReview = (
+  state: WorkspaceState,
+  task: { id: string; title: string; points: number },
+  result: CompletionResultInput,
+  now = new Date(),
+): WorkspaceState => {
+  const freshState = refreshDailyState(state, now);
+  if (freshState.completedTaskIds.includes(task.id) || freshState.pendingTaskReviews.some((review) => review.taskId === task.id)) return freshState;
+
+  return {
+    ...freshState,
+    pendingTaskReviews: [...freshState.pendingTaskReviews, {
+      id: `${freshState.dateKey}-${task.id}`,
+      taskId: task.id,
+      taskTitle: task.title,
+      points: task.points,
+      dateKey: freshState.dateKey,
+      result,
+      submittedAt: now.toISOString(),
+    }],
+  };
+};
+
+export const approveTaskReview = (
+  state: WorkspaceState,
+  reviewId: string,
+  requiredTaskIds: string[],
+  pin: string,
+  now = new Date(),
+): WorkspaceState | null => {
+  if (!verifyParentPin(state, pin, now)) return null;
+  const freshState = refreshDailyState(state, now);
+  const review = freshState.pendingTaskReviews.find((item) => item.id === reviewId && item.dateKey === freshState.dateKey);
+  if (!review) return null;
+  const completed = completeTask(freshState, review.taskId, review.points, requiredTaskIds, review.result, now);
+  return { ...completed, pendingTaskReviews: completed.pendingTaskReviews.filter((item) => item.id !== reviewId) };
+};
+
+export const approveAllTaskReviews = (
+  state: WorkspaceState,
+  requiredTaskIds: string[],
+  pin: string,
+  now = new Date(),
+): WorkspaceState | null => {
+  if (!verifyParentPin(state, pin, now)) return null;
+  const freshState = refreshDailyState(state, now);
+  if (!freshState.pendingTaskReviews.length) return freshState;
+  const completed = freshState.pendingTaskReviews.reduce(
+    (current, review) => completeTask(current, review.taskId, review.points, requiredTaskIds, review.result, now),
+    freshState,
+  );
+  return { ...completed, pendingTaskReviews: [] };
+};
+
+export const rejectTaskReview = (state: WorkspaceState, reviewId: string, pin: string, now = new Date()): WorkspaceState | null => {
+  if (!verifyParentPin(state, pin, now)) return null;
+  const freshState = refreshDailyState(state, now);
+  if (!freshState.pendingTaskReviews.some((review) => review.id === reviewId)) return null;
+  return { ...freshState, pendingTaskReviews: freshState.pendingTaskReviews.filter((review) => review.id !== reviewId) };
 };
 
 export const isWeekend = (today = new Date()) => today.getDay() === 0 || today.getDay() === 6;
@@ -164,10 +240,12 @@ export const requestReward = (
   };
 };
 
-export const verifyParentPin = (state: WorkspaceState, pin: string) => state.parentSettings.pin === pin;
+export const dailyParentPin = (today = new Date()) => `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+
+export const verifyParentPin = (_state: WorkspaceState, pin: string, today = new Date()) => dailyParentPin(today) === pin;
 
 export const approveReward = (state: WorkspaceState, requestId: string, pin: string, now = new Date()): WorkspaceState | null => {
-  if (!verifyParentPin(state, pin)) return null;
+  if (!verifyParentPin(state, pin, now)) return null;
   const request = state.rewardRequests.find((item) => item.id === requestId);
   if (!request || request.status !== 'pending' || state.points < request.cost) return null;
 
@@ -181,7 +259,7 @@ export const approveReward = (state: WorkspaceState, requestId: string, pin: str
 };
 
 export const fulfillReward = (state: WorkspaceState, requestId: string, pin: string, now = new Date()): WorkspaceState | null => {
-  if (!verifyParentPin(state, pin)) return null;
+  if (!verifyParentPin(state, pin, now)) return null;
   if (!state.rewardRequests.some((item) => item.id === requestId && item.status === 'approved')) return null;
 
   return {
@@ -192,13 +270,8 @@ export const fulfillReward = (state: WorkspaceState, requestId: string, pin: str
   };
 };
 
-export const updateParentPin = (state: WorkspaceState, currentPin: string, nextPin: string): WorkspaceState | null => {
-  if (!verifyParentPin(state, currentPin) || !/^\d{4}$/.test(nextPin)) return null;
-  return { ...state, parentSettings: { pin: nextPin } };
-};
-
-export const adjustPoints = (state: WorkspaceState, amount: number, pin: string): WorkspaceState | null => {
-  if (!verifyParentPin(state, pin) || !Number.isInteger(amount) || amount === 0) return null;
+export const adjustPoints = (state: WorkspaceState, amount: number, pin: string, now = new Date()): WorkspaceState | null => {
+  if (!verifyParentPin(state, pin, now) || !Number.isInteger(amount) || amount === 0) return null;
   return { ...state, points: Math.max(0, state.points + amount) };
 };
 
@@ -223,25 +296,53 @@ export const calculateStreak = (completedDates: string[], today = new Date()) =>
 
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
 
-export const getWeeklyReport = (state: WorkspaceState, today = new Date()) => {
-  const currentWeek = weekKey(today);
-  const weekResults = state.taskResults.filter((result) => weekKey(new Date(`${result.dateKey}T12:00:00`)) === currentWeek);
-  const arithmeticResults = weekResults.filter((result) => result.taskId === 'math-arithmetic' && result.score !== undefined);
-  const completedDays = state.completedDates.filter((value) => weekKey(new Date(`${value}T12:00:00`)) === currentWeek).length;
-  const totalDurationSeconds = weekResults.reduce((sum, result) => sum + result.durationSeconds, 0);
+const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoints: number, rewardRequests: RewardRequest[]) => {
+  const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && result.score !== undefined);
+  const totalDurationSeconds = results.reduce((sum, result) => sum + result.durationSeconds, 0);
   const arithmeticAverage = arithmeticResults.length
     ? Math.round(arithmeticResults.reduce((sum, result) => sum + (result.score ?? 0), 0) / arithmeticResults.length)
     : 0;
-  const wrongQuestions = weekResults.flatMap((result) => result.wrongQuestions);
+  const wrongQuestions = results.flatMap((result) => result.wrongQuestions);
 
   return {
     completedDays,
+    taskCount: results.length,
     totalDurationSeconds,
     arithmeticAverage,
     wrongQuestions,
-    earnedPoints: state.weeklyPoints[currentWeek] ?? 0,
-    rewardRequests: state.rewardRequests.filter((request) => weekKey(new Date(request.requestedAt)) === currentWeek),
+    earnedPoints,
+    rewardRequests,
   };
+};
+
+export const getDailyReport = (state: WorkspaceState, today = new Date()) => {
+  const currentDay = dateKey(today);
+  return summarizeReport(
+    state.taskResults.filter((result) => result.dateKey === currentDay),
+    state.completedDates.includes(currentDay) ? 1 : 0,
+    state.dailyEarnedPoints[currentDay] ?? 0,
+    state.rewardRequests.filter((request) => request.requestedAt.slice(0, 10) === currentDay),
+  );
+};
+
+export const getWeeklyReport = (state: WorkspaceState, today = new Date()) => {
+  const currentWeek = weekKey(today);
+  return summarizeReport(
+    state.taskResults.filter((result) => weekKey(new Date(`${result.dateKey}T12:00:00`)) === currentWeek),
+    state.completedDates.filter((value) => weekKey(new Date(`${value}T12:00:00`)) === currentWeek).length,
+    state.weeklyPoints[currentWeek] ?? 0,
+    state.rewardRequests.filter((request) => weekKey(new Date(request.requestedAt)) === currentWeek),
+  );
+};
+
+export const getMonthlyReport = (state: WorkspaceState, today = new Date()) => {
+  const currentMonth = dateKey(today).slice(0, 7);
+  return summarizeReport(
+    state.taskResults.filter((result) => result.dateKey.startsWith(currentMonth)),
+    state.completedDates.filter((value) => value.startsWith(currentMonth)).length,
+    Object.entries(state.dailyEarnedPoints).filter(([value]) => value.startsWith(currentMonth)).reduce((sum, [, points]) => sum + points, 0),
+    state.rewardRequests.filter((request) => request.requestedAt.startsWith(currentMonth)),
+  );
 };
 
 export const migrateLegacyState = (legacy: LegacyWorkspaceState, today = new Date()): WorkspaceState => {
@@ -275,9 +376,10 @@ const normalizeState = (parsed: Partial<WorkspaceState>, today: Date): Workspace
     bonusAwarded: parsed.bonusAwarded ?? false,
     completedDates: parsed.completedDates ?? [],
     taskResults: parsed.taskResults ?? [],
+    pendingTaskReviews: parsed.pendingTaskReviews ?? [],
     weeklyPoints: parsed.weeklyPoints ?? {},
+    dailyEarnedPoints: parsed.dailyEarnedPoints ?? {},
     rewardRequests: parsed.rewardRequests ?? [],
-    parentSettings: parsed.parentSettings ?? initial.parentSettings,
   }, today);
 };
 

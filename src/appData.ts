@@ -216,10 +216,10 @@ const taskRules: Record<string, Pick<TaskDefinition, "schedule" | "completionMod
   "math-multiply-divide": { schedule: "rotation", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "math-word-problems": { schedule: "rotation", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "english-daily": { schedule: "core", completionMode: "timer", minimumDuration: 900, requiresParent: false },
-  "game-hanzi": { schedule: "optional", completionMode: "auto", minimumScore: 100, requiresParent: false },
-  "game-number": { schedule: "optional", completionMode: "auto", minimumScore: 100, requiresParent: false },
-  "game-spot": { schedule: "optional", completionMode: "auto", minimumScore: 100, requiresParent: false },
-  "game-logic": { schedule: "optional", completionMode: "auto", minimumScore: 100, requiresParent: false },
+  "game-hanzi": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
+  "game-number": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
+  "game-spot": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
+  "game-logic": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "sport-rope": { schedule: "core", completionMode: "parent", requiresParent: true },
   "sport-high-jump": { schedule: "core", completionMode: "parent", requiresParent: true },
   "sport-hour": { schedule: "core", completionMode: "parent", requiresParent: true },
@@ -241,23 +241,82 @@ const sportTaskIds = ["sport-rope", "sport-high-jump", "sport-hour"];
 
 const dayNumber = (value: Date) => Math.floor(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / 86400000);
 
+const augustUnits = [
+  { start: 1, end: 4 },
+  { start: 5, end: 8 },
+  { start: 9, end: 12 },
+  { start: 13, end: 16 },
+  { start: 17, end: 20 },
+  { start: 21, end: 24 },
+  { start: 25, end: 27 },
+  { start: 28, end: 31 },
+];
+
+const stageLabels = ["认识新内容", "听读与理解", "练习与运用", "小复习闯关"];
+
+export const getStudySchedule = (value = new Date()) => {
+  if (value.getMonth() === 7) {
+    const day = value.getDate();
+    const unitIndex = augustUnits.findIndex((unit) => day >= unit.start && day <= unit.end);
+    const safeIndex = unitIndex < 0 ? 0 : unitIndex;
+    const unit = augustUnits[safeIndex];
+    const dayInUnit = Math.max(0, day - unit.start);
+    const length = unit.end - unit.start + 1;
+    const stageLabel = length === 3
+      ? [stageLabels[0], "听读与练习", stageLabels[3]][dayInUnit]
+      : stageLabels[dayInUnit];
+    const schoolDate = new Date(value.getFullYear(), 8, 1);
+    return {
+      unitIndex: safeIndex,
+      dayInUnit,
+      stageLabel,
+      dateRange: `8月${unit.start}日–${unit.end}日`,
+      daysUntilSchool: Math.max(1, Math.ceil((schoolDate.getTime() - value.getTime()) / 86400000)),
+      isSummerPlan: true,
+    };
+  }
+
+  if (value.getMonth() === 8 && value.getDate() === 1) {
+    return { unitIndex: 7, dayInUnit: 3, stageLabel: "开学回顾", dateRange: "9月1日", daysUntilSchool: 0, isSummerPlan: true };
+  }
+
+  const unitIndex = Math.floor(dayNumber(value) / 7) % 8;
+  return { unitIndex, dayInUnit: value.getDay(), stageLabel: stageLabels[value.getDay() % stageLabels.length], dateRange: `第${unitIndex + 1}周`, daysUntilSchool: 0, isSummerPlan: false };
+};
+
+const augustRotationPlan = [
+  ["chinese-preview-copybook", "chinese-dictation", "chinese-reading-comprehension", "chinese-memorize"],
+  ["chinese-preview-copybook", "math-multiply-divide", "chinese-reading-comprehension", "chinese-picture-writing"],
+  ["chinese-preview-copybook", "chinese-dictation", "math-word-problems", "chinese-memorize"],
+  ["chinese-preview-copybook", "math-multiply-divide", "chinese-reading-comprehension", "chinese-picture-writing"],
+  ["chinese-preview-copybook", "chinese-dictation", "math-word-problems", "chinese-memorize"],
+  ["chinese-preview-copybook", "math-multiply-divide", "chinese-reading-comprehension", "chinese-picture-writing"],
+  ["chinese-preview-copybook", "chinese-dictation", "math-word-problems"],
+  ["chinese-preview-copybook", "math-multiply-divide", "chinese-reading-comprehension", "chinese-memorize"],
+];
+
 export const getDailyTaskIds = (value = new Date()) => {
   const sportId = sportTaskIds[dayNumber(value) % sportTaskIds.length];
   const common = ["chinese-morning-reading", "math-arithmetic", "english-daily", "chinese-night-reading", sportId];
   if (value.getDay() === 0) return common.filter((id) => id !== "math-arithmetic");
+  const schedule = getStudySchedule(value);
+  if (schedule.isSummerPlan && value.getMonth() === 7) {
+    const unitTasks = augustRotationPlan[schedule.unitIndex];
+    return [...common, unitTasks[schedule.dayInUnit % unitTasks.length]];
+  }
   return [...common, rotatingTaskIds[dayNumber(value) % rotatingTaskIds.length]];
 };
 
 export const optionalTaskIds = taskCatalog.filter((task) => task.schedule === "optional").map((task) => task.id);
 
-export const sectionMeta: Record<ViewKey, { label: string; character: TaskDefinition["character"]; navIcon: string }> = {
-  home: { label: "每日打卡", character: "hello-kitty", navIcon: "characters/hello-kitty.png" },
-  chinese: { label: "语文专区", character: "my-melody", navIcon: "characters/my-melody.png" },
-  math: { label: "数学专区", character: "kuromi", navIcon: "characters/kuromi.png" },
-  english: { label: "英语专区", character: "cinnamoroll", navIcon: "characters/cinnamoroll.png" },
-  game: { label: "益智游戏", character: "kuromi", navIcon: "characters/keroppi.svg" },
-  sport: { label: "运动锻炼", character: "hello-kitty", navIcon: "characters/pochacco.svg" },
-  shop: { label: "积分商店", character: "my-melody", navIcon: "characters/pompompurin.svg" },
+export const sectionMeta: Record<ViewKey, { label: string; mobileLabel: string; character: TaskDefinition["character"]; navIcon: string }> = {
+  home: { label: "每日打卡", mobileLabel: "首页", character: "hello-kitty", navIcon: "characters/hello-kitty.png" },
+  chinese: { label: "语文专区", mobileLabel: "语文", character: "my-melody", navIcon: "characters/my-melody.png" },
+  math: { label: "数学专区", mobileLabel: "数学", character: "kuromi", navIcon: "characters/kuromi.png" },
+  english: { label: "英语专区", mobileLabel: "英语", character: "cinnamoroll", navIcon: "characters/cinnamoroll.png" },
+  game: { label: "益智游戏", mobileLabel: "游戏", character: "kuromi", navIcon: "characters/keroppi.svg" },
+  sport: { label: "运动锻炼", mobileLabel: "运动", character: "hello-kitty", navIcon: "characters/pochacco.svg" },
+  shop: { label: "积分商店", mobileLabel: "商店", character: "my-melody", navIcon: "characters/pompompurin.svg" },
 };
 
 export const characterImages: Record<TaskDefinition["character"], string> = {
@@ -544,16 +603,33 @@ export const weeklyContent: WeeklyContent[] = [
   },
 ];
 
-export const getWeeklyContent = (value = new Date()) => weeklyContent[Math.floor(dayNumber(value) / 7) % weeklyContent.length];
+export const getWeeklyContent = (value = new Date()) => weeklyContent[getStudySchedule(value).unitIndex % weeklyContent.length];
 
-export const wordProblems = [
-  { prompt: "小雨有28张贴纸，送给同学9张，还剩多少张？", answer: "19张" },
-  { prompt: "图书角原来有36本书，又放进12本，现在有多少本？", answer: "48本" },
-  { prompt: "每排有4盆花，摆了3排，一共有多少盆？", answer: "12盆" },
-  { prompt: "18个苹果平均放进3个盘子，每盘几个？", answer: "6个" },
-  { prompt: "公交车上有45人，下车8人，上车6人，现在有多少人？", answer: "43人" },
-  { prompt: "一根彩带长60厘米，剪去25厘米，还剩多少厘米？", answer: "35厘米" },
-];
+const problemObjects = ["贴纸", "彩笔", "贝壳", "积木", "卡片", "气球", "书签", "小花", "糖果", "纽扣"];
+
+export const wordProblems = Array.from({ length: 40 }, (_, index) => {
+  const item = problemObjects[index % problemObjects.length];
+  const group = Math.floor(index / 10);
+  const offset = index % 10;
+  if (group === 0) {
+    const first = 18 + offset * 3;
+    const second = 7 + (offset % 5) * 2;
+    return { prompt: `盒子里有${first}个${item}，又放进${second}个，现在一共有多少个？`, answer: `${first + second}个` };
+  }
+  if (group === 1) {
+    const total = 48 + offset * 4;
+    const used = 9 + (offset % 6) * 3;
+    return { prompt: `手工课准备了${total}个${item}，用掉${used}个，还剩多少个？`, answer: `${total - used}个` };
+  }
+  if (group === 2) {
+    const rows = 2 + (offset % 5);
+    const each = 2 + (offset % 6);
+    return { prompt: `每排摆${each}个${item}，一共摆了${rows}排，共有多少个？`, answer: `${rows * each}个` };
+  }
+  const plates = 2 + (offset % 5);
+  const each = 2 + (offset % 6);
+  return { prompt: `把${plates * each}个${item}平均放进${plates}个盒子，每个盒子放多少个？`, answer: `${each}个` };
+});
 
 export interface GameChallenge {
   question: string;
@@ -563,38 +639,55 @@ export interface GameChallenge {
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
-  ["妹妹", "人物"], ["哥哥", "人物"], ["教室", "地点"], ["公园", "地点"], ["操场", "地点"],
-  ["图书馆", "地点"], ["学校", "地点"], ["车站", "地点"], ["跑步", "动作"], ["写字", "动作"],
+  ["妹妹", "人物"], ["哥哥", "人物"], ["爷爷", "人物"], ["奶奶", "人物"], ["护士", "人物"],
+  ["司机", "人物"], ["厨师", "人物"], ["校长", "人物"], ["教室", "地点"], ["公园", "地点"], ["操场", "地点"],
+  ["图书馆", "地点"], ["学校", "地点"], ["车站", "地点"], ["医院", "地点"], ["商店", "地点"],
+  ["食堂", "地点"], ["花园", "地点"], ["家里", "地点"], ["邮局", "地点"], ["跑步", "动作"], ["写字", "动作"],
   ["唱歌", "动作"], ["跳绳", "动作"], ["读书", "动作"], ["画画", "动作"], ["整理", "动作"],
+  ["洗手", "动作"], ["拍球", "动作"], ["听讲", "动作"], ["浇花", "动作"], ["扫地", "动作"],
+  ["鼓掌", "动作"], ["排队", "动作"], ["起床", "动作"],
 ] as const;
 
-const names = ["小雨", "乐乐", "安安"];
+const names = ["小雨", "乐乐", "安安", "甜甜", "朵朵", "晨晨", "果果", "米米", "可可", "宁宁"];
+const spotPairs = [
+  ["🌸", "🌼"], ["⭐", "🌟"], ["🍎", "🍅"], ["🐰", "🐱"], ["🎈", "🍭"],
+  ["🍓", "🍒"], ["☀️", "🌙"], ["🎀", "🎁"], ["🐶", "🐻"], ["🌈", "☁️"],
+] as const;
 
 export const gameQuestionBanks: Record<string, GameChallenge[]> = {
   "game-hanzi": hanziItems.map(([word, answer]) => ({ question: `“${word}”应该放进哪个篮子？`, options: ["人物", "地点", "动作"], answer })),
-  "game-number": Array.from({ length: 20 }, (_, index) => {
-    const start = 1 + (index % 5);
-    const step = 2 + (index % 4);
+  "game-number": Array.from({ length: 40 }, (_, index) => {
+    const start = 1 + (index % 8);
+    const step = 2 + Math.floor(index / 8);
     const answer = start + step * 4;
     return { question: `${start}、${start + step}、${start + step * 2}、${start + step * 3}、？`, options: [String(answer - 1), String(answer), String(answer + step)], answer: String(answer) };
   }),
-  "game-spot": Array.from({ length: 20 }, (_, index) => {
-    const icons = ["🌸", "⭐", "🍎", "🐰", "🎈"];
-    const same = icons[index % icons.length];
-    const different = icons[(index + 1) % icons.length];
+  "game-spot": Array.from({ length: 40 }, (_, index) => {
+    const [same, different] = spotPairs[Math.floor(index / 4)];
     const position = (index % 4) + 1;
     const row = Array.from({ length: 4 }, (_, itemIndex) => itemIndex + 1 === position ? different : same).join("　");
     return { question: `${row} 中哪一个不同？`, options: ["第1个", "第2个", "第3个", "第4个"], answer: `第${position}个` };
   }),
-  "game-logic": Array.from({ length: 20 }, (_, index) => {
-    const first = names[index % names.length];
-    const second = names[(index + 1) % names.length];
-    const third = names[(index + 2) % names.length];
-    return { question: `${first}比${second}高，${second}比${third}高，谁最高？`, options: [first, second, third], answer: first };
+  "game-logic": Array.from({ length: 40 }, (_, index) => {
+    const offset = index % names.length;
+    const first = names[offset];
+    const second = names[(offset + 1) % names.length];
+    const third = names[(offset + 2) % names.length];
+    const group = Math.floor(index / names.length);
+    if (group === 0) return { question: `${first}比${second}高，${second}比${third}高，谁最高？`, options: [first, second, third], answer: first };
+    if (group === 1) return { question: `${first}比${second}早到，${third}比${first}晚到，谁最早到？`, options: [first, second, third], answer: first };
+    if (group === 2) return { question: `排队时，${second}在${first}后面，${third}在${second}后面，谁排在最前面？`, options: [first, second, third], answer: first };
+    return { question: `${first}有8颗星，${second}比${first}少2颗，${third}比${second}少1颗，谁的星星最多？`, options: [first, second, third], answer: first };
   }),
 };
 
 export const getGameChallenge = (taskId: string, value = new Date()) => {
-  const bank = gameQuestionBanks[taskId];
-  return bank[dayNumber(value) % bank.length];
+  return getGameChallenges(taskId, value, 1)[0];
+};
+
+export const getGameChallenges = (taskId: string, value = new Date(), count = 5) => {
+  const bank = gameQuestionBanks[taskId] ?? [];
+  if (!bank.length) return [];
+  const start = (dayNumber(value) * count) % bank.length;
+  return Array.from({ length: Math.min(count, bank.length) }, (_, index) => bank[(start + index) % bank.length]);
 };
