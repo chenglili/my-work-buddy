@@ -1,0 +1,77 @@
+import type { ExerciseActivity, LearningGame } from "../types";
+
+export const learningGames = [
+  {
+    id: "game-character-basket",
+    title: "汉字分类篮",
+    subject: "chinese",
+    description: "把表示人物、地点和动作的词语放进正确篮子。",
+    skill: "词语分类",
+    durationMinutes: 5,
+    rewardStars: 3,
+    emoji: "🧺",
+  },
+  {
+    id: "game-math-bubbles",
+    title: "口算泡泡",
+    subject: "math",
+    description: "在倒计时结束前点破带有正确答案的泡泡。",
+    skill: "100以内心算",
+    durationMinutes: 5,
+    rewardStars: 3,
+    emoji: "🫧",
+  },
+  {
+    id: "game-word-match",
+    title: "单词配对",
+    subject: "english",
+    description: "把英文单词与对应的图片或中文意思连起来。",
+    skill: "单词认读",
+    durationMinutes: 5,
+    rewardStars: 3,
+    emoji: "🧩",
+  },
+  {
+    id: "game-memory-path",
+    title: "记忆小路",
+    subject: "activity",
+    description: "按顺序记住图案，再走出正确路线。",
+    skill: "观察与记忆",
+    durationMinutes: 4,
+    rewardStars: 3,
+    emoji: "🌟",
+  },
+] satisfies LearningGame[];
+
+export const exerciseActivities = [
+  {
+    id: "exercise-jump-grid",
+    title: "数字跳格子",
+    description: "听到数字后跳进对应格子，活动全身。",
+    durationMinutes: 6,
+    steps: ["在空地摆好1到6的数字卡", "家长随机说一个数字", "双脚轻轻跳到对应数字旁"],
+    safetyTip: "选择防滑、无障碍物的空地，落地时屈膝。",
+    rewardStars: 6,
+    emoji: "🏃",
+  },
+  {
+    id: "exercise-animal-stretch",
+    title: "趣味拉伸",
+    description: "模仿小树、飞鸟和小猫，放松肩背。",
+    durationMinutes: 5,
+    steps: ["双手向上伸展，像小树长高", "双臂平举，缓慢画圈", "双手撑膝，轻轻弓背再放松"],
+    safetyTip: "动作保持缓慢，不追求过度拉伸。",
+    rewardStars: 6,
+    emoji: "🌳",
+  },
+  {
+    id: "exercise-eye-break",
+    title: "远眺休息",
+    description: "学习间隙离开屏幕，让眼睛和身体休息。",
+    durationMinutes: 3,
+    steps: ["站起来走到窗边", "看远处的绿色植物或建筑", "眨眨眼，再转动肩膀"],
+    safetyTip: "不要直视太阳，也不要倚靠窗户。",
+    rewardStars: 6,
+    emoji: "👀",
+  },
+] satisfies ExerciseActivity[];
