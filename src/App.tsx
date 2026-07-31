@@ -46,7 +46,7 @@ const formatDate = (value: string) => value.slice(5).replace("-", "/");
 const generateArithmetic = (seedText: string): ArithmeticQuestion[] => {
   let seed = [...seedText].reduce((sum, char) => sum + char.charCodeAt(0), 37);
   const next = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483647;
+    seed = Math.floor((seed * 1103515245 + 12345) % 2147483647);
     return seed;
   };
 
