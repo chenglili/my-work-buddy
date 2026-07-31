@@ -210,10 +210,10 @@ export const sectionMeta: Record<ViewKey, { label: string; icon: string; charact
 };
 
 export const characterImages: Record<TaskDefinition["character"], string> = {
-  "hello-kitty": "/characters/hello-kitty.png",
-  "my-melody": "/characters/my-melody.png",
-  kuromi: "/characters/kuromi.png",
-  cinnamoroll: "/characters/cinnamoroll.png",
+  "hello-kitty": "characters/hello-kitty.png",
+  "my-melody": "characters/my-melody.png",
+  kuromi: "characters/kuromi.png",
+  cinnamoroll: "characters/cinnamoroll.png",
 };
 
 export const memorizationPassages = [
