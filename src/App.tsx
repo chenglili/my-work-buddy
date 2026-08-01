@@ -644,11 +644,20 @@ function speak(text: string, lang = "zh-CN") {
     : lang === "en-GB"
       ? ["Sonia", "Libby", "Serena", "Stephanie", "Google UK English Female", "Jenny", "Samantha"]
       : ["Jenny", "Samantha", "Aria", "Ava", "Google US English"];
-  const preferredVoice = preferredNames.map((name) => languageVoices.find((voice) => voice.name.includes(name))).find(Boolean);
+  const mobileFemaleVoice = languageVoices.find((voice) => {
+    const label = `${voice.name} ${voice.voiceURI}`;
+    return /xiaoxiao|xiaoyi|ting[- ]?ting|mei[- ]?jia|yaoyao|huihui|siri.*female|female|woman|女声/i.test(label)
+      && !/yunxi|yunyang|yunjian|yunfeng|google.*普通话|male|man|云希|云扬|云健|云枫/i.test(label);
+  });
+  const preferredVoice = preferredNames
+    .map((name) => languageVoices.find((voice) => voice.name.includes(name)))
+    .find((voice) => voice && !/yunxi|yunyang|yunjian|yunfeng|google.*普通话|male|man|云希|云扬|云健|云枫/i.test(`${voice.name} ${voice.voiceURI}`))
+    ?? mobileFemaleVoice;
   const femaleVoice = languageVoices.find((voice) => /female|woman|女|xiaoxiao|xiaoyi|ting-ting|mei-jia|yaoyao|huihui/i.test(voice.name));
-  utterance.voice = preferredVoice ?? femaleVoice ?? languageVoices[0] ?? null;
+  const selectedFemaleVoice = mobileFemaleVoice ?? femaleVoice ?? preferredVoice;
+  utterance.voice = selectedFemaleVoice ?? languageVoices[0] ?? null;
   utterance.rate = lang.startsWith("zh") ? 0.74 : 0.8;
-  utterance.pitch = lang.startsWith("zh") ? 1.12 : 1.03;
+  utterance.pitch = lang.startsWith("zh") ? (selectedFemaleVoice ? 1.12 : 1.2) : 1.03;
   utterance.volume = 1;
   speechWindow.speechSynthesis.speak(utterance);
 }
