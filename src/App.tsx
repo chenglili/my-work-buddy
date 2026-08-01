@@ -400,6 +400,7 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
         )}
 
         {workspace.authMessage || message || workspace.error ? <p className="cloud-access-message">{workspace.authMessage || message || workspace.error}</p> : null}
+        {workspace.mode === "signed-out" && workspace.authMessage ? <div className="cloud-access-actions"><button className="secondary" onClick={() => void workspace.refresh()}><RefreshCw size={17} />我已打开邮件，检查登录状态</button></div> : null}
         {workspace.mode === "error" || workspace.mode === "pairing" ? <div className="cloud-access-actions"><button className="secondary" onClick={() => void workspace.refresh()}><RefreshCw size={17} />重新连接</button><button className="secondary" onClick={() => void workspace.signOut()}><LogOut size={17} />清除当前会话</button></div> : null}
       </section>
     </main>
@@ -422,7 +423,7 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
         <span>{progress}% 今日进度</span>
         <span>{streak} 天连续打卡</span>
         {cloud.enabled ? <span className={`cloud-status ${cloud.syncStatus}`}>{cloud.syncStatus === "offline" ? <CloudOff size={17} /> : cloud.syncStatus === "syncing" ? <RefreshCw className="spin" size={17} /> : <Cloud size={17} />}{cloud.syncStatus === "synced" ? "已同步" : cloud.syncStatus === "syncing" ? "同步中" : cloud.syncStatus === "pending" ? "待同步" : "离线"}</span> : null}
-        {cloud.enabled ? <button className="top-icon-button" title="退出云端账号" aria-label="退出云端账号" onClick={() => void cloud.signOut()}><LogOut size={18} /></button> : null}
+        {cloud.enabled && cloud.role !== "child_device" ? <button className="top-icon-button" title="退出云端账号" aria-label="退出云端账号" onClick={() => void cloud.signOut()}><LogOut size={18} /></button> : null}
       </div>
     </header>
   );

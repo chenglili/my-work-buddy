@@ -12,7 +12,7 @@ import {
   type PetItemId,
   type WorkspaceState,
 } from "../state/workspace";
-import { cloudBackendEnabled, supabase } from "./supabase";
+import { authCallbackPresent, cloudBackendEnabled, supabase } from "./supabase";
 import { clearCloudUserData, enqueueTaskCommand, readCloudSnapshot, readTaskOutbox, removeTaskCommand, saveCloudSnapshot } from "./offlineStore";
 import type { CloudMode, CloudWorkspaceController, CloudWorkspacePayload, LegacyImportPreview, QueuedTaskCommand, SyncStatus } from "./types";
 
@@ -218,6 +218,15 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     }
   }, [applyPayload, invokeNotification, refreshPendingTaskIds, resetChildPairing]);
 
+  const restoreSession = useCallback(async () => {
+    if (!supabase) return false;
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!data.session) return false;
+    await initializeSession(data.session);
+    return true;
+  }, [initializeSession]);
+
   const syncQueuedCommand = useCallback(async (command: QueuedTaskCommand) => {
     if (!supabase) return;
     const { data, error: rpcError } = await supabase.rpc("submit_task", {
@@ -275,16 +284,46 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
 
   useEffect(() => {
     if (!cloudBackendEnabled || !supabase) return;
+    const client = supabase;
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (data.session) void initializeSession(data.session);
-      else setMode("signed-out");
+    const authChannel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("sweetheart-auth-session");
+    const receiveSession = (event: MessageEvent) => {
+      const data = event.data as { type?: string; accessToken?: string; refreshToken?: string };
+      if (data?.type !== "supabase-session" || !data.accessToken || !data.refreshToken) return;
+      void client.auth.setSession({ access_token: data.accessToken, refresh_token: data.refreshToken }).catch((sessionError) => {
+        if (active) setError(errorMessage(sessionError));
+      });
+    };
+    authChannel?.addEventListener("message", receiveSession);
+    const shareSession = (session: Session | null) => {
+      if (!authCallbackPresent || !session) return;
+      authChannel?.postMessage({ type: "supabase-session", accessToken: session.access_token, refreshToken: session.refresh_token });
+    };
+    void restoreSession().then((restored) => {
+      if (restored) shareSession(sessionRef.current);
+      if (active && !restored) setMode("signed-out");
+    }).catch((sessionError) => {
+      if (active) {
+        setMode("error");
+        setError(errorMessage(sessionError));
+      }
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const resumeSession = () => {
+      if (document.visibilityState !== "visible" || sessionRef.current) return;
+      void restoreSession().catch((sessionError) => {
+        if (active) setError(errorMessage(sessionError));
+      });
+    };
+    window.addEventListener("focus", resumeSession);
+    window.addEventListener("pageshow", resumeSession);
+    document.addEventListener("visibilitychange", resumeSession);
+    const { data: listener } = client.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       sessionRef.current = session;
-      if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) void initializeSession(session);
+      if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) {
+        shareSession(session);
+        void initializeSession(session);
+      }
       else {
         if (session) return;
         const emptyState = initialWorkspaceState();
@@ -303,9 +342,14 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     });
     return () => {
       active = false;
+      authChannel?.removeEventListener("message", receiveSession);
+      authChannel?.close();
+      window.removeEventListener("focus", resumeSession);
+      window.removeEventListener("pageshow", resumeSession);
+      document.removeEventListener("visibilitychange", resumeSession);
       listener.subscription.unsubscribe();
     };
-  }, [initializeSession]);
+  }, [initializeSession, restoreSession]);
 
   useEffect(() => {
     if (!cloudBackendEnabled || !supabase || mode !== "ready") return;
@@ -379,8 +423,10 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   }, []);
 
   const refresh = useCallback(async () => {
-    await refreshFromCloud();
-  }, [refreshFromCloud]);
+    if (!sessionRef.current && await restoreSession()) return;
+    const refreshed = await refreshFromCloud();
+    if (!refreshed && !sessionRef.current) setAuthMessage("还没有检测到登录状态，请在同一个浏览器中打开邮件链接。 ");
+  }, [refreshFromCloud, restoreSession]);
 
   const refreshLocalDate = useCallback(() => {
     const next = refreshDailyState(state);
