@@ -1,5 +1,5 @@
 begin;
-select plan(49);
+select plan(51);
 
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
@@ -43,6 +43,8 @@ select ok(position('p_date_key < v_today - 6' in pg_get_functiondef('public.subm
 select ok(position('v_completed_date <> p_date_key' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'offline completion timestamp must match its task date');
 select ok(has_function_privilege('authenticated', 'public.create_pair_code(uuid,text)', 'EXECUTE'), 'parents can create idempotent pairing commands');
 select ok(has_function_privilege('authenticated', 'public.claim_pair_code(uuid,text,text)', 'EXECUTE'), 'anonymous authenticated devices can claim pairing codes');
+select ok(position('extensions' in coalesce(array_to_string((select proconfig from pg_proc where oid = 'public.create_pair_code(uuid,text)'::regprocedure), ','), '')) > 0, 'pair code creation can resolve pgcrypto functions');
+select ok(position('extensions' in coalesce(array_to_string((select proconfig from pg_proc where oid = 'public.claim_pair_code(uuid,text,text)'::regprocedure), ','), '')) > 0, 'pair code claiming can resolve pgcrypto functions');
 select ok(has_function_privilege('authenticated', 'public.revoke_child_device(uuid,uuid)', 'EXECUTE'), 'parents can revoke paired devices through the RPC');
 select ok(has_function_privilege('authenticated', 'public.cancel_reward(uuid,uuid)', 'EXECUTE'), 'child devices can call the guarded reward cancellation RPC');
 select ok(has_function_privilege('authenticated', 'public.reject_reward(uuid,uuid)', 'EXECUTE'), 'parents can call the guarded reward rejection RPC');
