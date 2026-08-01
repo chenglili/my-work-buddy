@@ -697,46 +697,15 @@ function speak(text: string, lang = "zh-CN") {
   }
   const synthesis = speechWindow.speechSynthesis;
   const Utterance = speechWindow.SpeechSynthesisUtterance;
-  const voiceRequestId = ++speechVoiceRequestId;
-  let waitingForVoices = false;
-  let retryTimer: number | undefined;
-  const speakWithAvailableVoice = (allowFallback: boolean) => {
-    if (voiceRequestId !== speechVoiceRequestId) return;
-    const voices = synthesis.getVoices();
-    if (!voices.length) {
-      if (waitingForVoices) return;
-      waitingForVoices = true;
-      const retryWhenVoicesReady = () => {
-        synthesis.removeEventListener("voiceschanged", retryWhenVoicesReady);
-        if (retryTimer) window.clearTimeout(retryTimer);
-        speakWithAvailableVoice(true);
-      };
-      synthesis.addEventListener("voiceschanged", retryWhenVoicesReady, { once: true });
-      retryTimer = window.setTimeout(retryWhenVoicesReady, 1200);
-      return;
-    }
-    const selection = selectSpeechVoice(voices, lang);
-    if (lang.toLowerCase().startsWith("zh") && !selection.isFemale && !allowFallback && !waitingForVoices) {
-      waitingForVoices = true;
-      const retryWhenVoicesReady = () => {
-        synthesis.removeEventListener("voiceschanged", retryWhenVoicesReady);
-        if (retryTimer) window.clearTimeout(retryTimer);
-        speakWithAvailableVoice(true);
-      };
-      synthesis.addEventListener("voiceschanged", retryWhenVoicesReady, { once: true });
-      retryTimer = window.setTimeout(retryWhenVoicesReady, 1200);
-      return;
-    }
-    synthesis.cancel();
-    const utterance = new Utterance(text);
-    utterance.lang = lang;
-    utterance.voice = selection.voice;
-    utterance.rate = lang.toLowerCase().startsWith("zh") ? 0.74 : 0.8;
-    utterance.pitch = lang.toLowerCase().startsWith("zh") ? (selection.isFemale ? 1.12 : 1.22) : 1.03;
-    utterance.volume = 1;
-    synthesis.speak(utterance);
-  };
-  speakWithAvailableVoice(false);
+  const selection = selectSpeechVoice(synthesis.getVoices(), lang);
+  synthesis.cancel();
+  const utterance = new Utterance(text);
+  utterance.lang = lang;
+  utterance.voice = selection.voice;
+  utterance.rate = lang.toLowerCase().startsWith("zh") ? 0.74 : 0.8;
+  utterance.pitch = lang.toLowerCase().startsWith("zh") ? (selection.isFemale ? 1.12 : 1.22) : 1.03;
+  utterance.volume = 1;
+  synthesis.speak(utterance);
 }
 
 function legacySpeak(text: string, lang = "zh-CN") {
