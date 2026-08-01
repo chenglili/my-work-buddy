@@ -1511,7 +1511,7 @@ function petStatusTitle(satiety: number, happiness: number, cleanliness: number)
 }
 
 function petOperationError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : String(error);
   if (/insufficient points/i.test(message)) return "积分不够，嘟嘟建议先完成一项学习任务。";
   if (/already owned/i.test(message)) return "叮当铃已经在嘟嘟的玩具架上了。";
   if (/unavailable|not owned/i.test(message)) return "道具还没准备好，嘟嘟正在用眼神提醒你去商店。";
