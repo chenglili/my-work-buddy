@@ -3110,9 +3110,9 @@ textarea {
 
 .pet-character {
   z-index: 1;
-  top: 2.2%;
-  left: 9%;
-  width: 78.5%;
+  top: 11%;
+  left: 18%;
+  width: 64%;
   filter: drop-shadow(12px 16px 12px rgba(35, 59, 42, 0.22));
   transform-origin: 50% 82%;
 }
