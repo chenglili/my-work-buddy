@@ -190,7 +190,7 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
     points: 6,
     minutes: "20分钟",
     character: "hello-kitty",
-    summary: "摸高跳200个以上达标，注意落地缓冲。",
+    summary: "摸高跳100个以上达标，注意落地缓冲。",
   },
   {
     id: "sport-hour",
@@ -215,17 +215,19 @@ const taskRules: Record<string, Pick<TaskDefinition, "schedule" | "completionMod
   "math-arithmetic": { schedule: "core", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "math-multiply-divide": { schedule: "rotation", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "math-word-problems": { schedule: "rotation", completionMode: "auto", minimumScore: 80, requiresParent: false },
-  "english-daily": { schedule: "core", completionMode: "timer", minimumDuration: 900, requiresParent: false },
-  "game-hanzi": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
-  "game-number": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
-  "game-spot": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
-  "game-logic": { schedule: "optional", completionMode: "auto", minimumScore: 80, requiresParent: false },
+  "english-daily": { schedule: "core", completionMode: "auto", minimumScore: 0, requiresParent: false },
+  "game-hanzi": { schedule: "optional", completionMode: "auto", minimumScore: 0, requiresParent: false },
+  "game-number": { schedule: "optional", completionMode: "auto", minimumScore: 0, requiresParent: false },
+  "game-spot": { schedule: "optional", completionMode: "auto", minimumScore: 0, requiresParent: false },
+  "game-logic": { schedule: "optional", completionMode: "auto", minimumScore: 0, requiresParent: false },
   "sport-rope": { schedule: "core", completionMode: "parent", requiresParent: true },
   "sport-high-jump": { schedule: "core", completionMode: "parent", requiresParent: true },
   "sport-hour": { schedule: "core", completionMode: "parent", requiresParent: true },
 };
 
-export const taskCatalog: TaskDefinition[] = baseTaskCatalog.map((task) => ({ ...task, ...taskRules[task.id] }));
+export const taskCatalog: TaskDefinition[] = baseTaskCatalog.map((task) => ({ ...task, ...taskRules[task.id] })).map((task) => task.id === "english-daily"
+  ? { ...task, minutes: "鑷富瀹夋帓", summary: "璇戞灄鐗堜簩涓婁富棰樺惉璇伙紝鍖呭惈鍗曡瘝銆佹牳蹇冨彞鍨嬪拰璺熻浠诲姟锛屾寜鑷繁鐨勮妭濂忓畨鎺掋€?" }
+  : task);
 
 const rotatingTaskIds = [
   "chinese-preview-copybook",
@@ -782,7 +784,7 @@ export const getGameChallenge = (taskId: string, value = new Date()) => {
   return getGameChallenges(taskId, value, 1)[0];
 };
 
-export const getGameChallenges = (taskId: string, value = new Date(), count = 5) => {
+export const getGameChallenges = (taskId: string, value = new Date(), count = 8) => {
   const bank = gameQuestionBanks[taskId] ?? [];
   if (!bank.length) return [];
   const start = (dayNumber(value) * count) % bank.length;

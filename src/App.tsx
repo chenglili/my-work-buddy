@@ -150,6 +150,11 @@ const encouragements = [
 
 const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
 
+const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set([
+  ...state.completedTaskIds,
+  ...state.taskResults.filter((result) => result.dateKey === state.dateKey).map((result) => result.taskId),
+]));
+
 const formatDate = (value: string) => value.slice(5).replace("-", "/");
 
 export const generateArithmetic = (seedText: string, count = 20): ArithmeticQuestion[] => {
@@ -214,7 +219,8 @@ export default function App() {
 
   const currentDate = dateFromKey(state.dateKey);
   const requiredTaskIds = getDailyTaskIds(currentDate);
-  const readyTaskIds = new Set([...state.completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
+  const completedTaskIds = completedTaskIdsForToday(state);
+  const readyTaskIds = new Set([...completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
   const completedRequired = requiredTaskIds.filter((id) => readyTaskIds.has(id)).length;
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
   const streak = calculateStreak(state.completedDates);
@@ -302,7 +308,7 @@ export default function App() {
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
+          <TaskPage task={currentTask} completed={completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
         ) : route.view === "home" ? (
           <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
@@ -310,7 +316,7 @@ export default function App() {
         ) : route.view === "pet" ? (
           <PetPage state={state} setState={setState} cloud={workspace} onToast={setToast} />
         ) : (
-          <SectionPage view={route.view} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
+          <SectionPage view={route.view} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
         )}
       </main>
 
@@ -486,7 +492,8 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
 function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { state: WorkspaceState; requiredTaskIds: string[]; syncPendingIds: string[]; onOpenTask: (taskId: string) => void }) {
   const dailyTasks = requiredTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const optionalTasks = optionalTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
-  const readyTaskIds = new Set([...state.completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...syncPendingIds]);
+  const completedTaskIds = completedTaskIdsForToday(state);
+  const readyTaskIds = new Set([...completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...syncPendingIds]);
   const report = getWeeklyReport(state);
   const weeklyTarget = 250;
   const weeklyProgress = Math.min(100, Math.round((report.earnedPoints / weeklyTarget) * 100));
@@ -509,12 +516,12 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
         <div className="progress-track" aria-label={`本周进度${weeklyProgress}%`}><span style={{ width: `${weeklyProgress}%` }} /></div>
         <p>{report.earnedPoints >= weeklyTarget ? "本周小玩具目标已经达成，周末请家长确认兑换。" : `再获得${weeklyTarget - report.earnedPoints}积分，就达到小玩具周目标。`}</p>
       </article>
-      <TaskGrid tasks={dailyTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
+      <TaskGrid tasks={dailyTasks} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
       <div className="section-title compact-title">
         <Trophy size={34} />
         <div><h2>奖励小游戏</h2><p>所有小游戏均已开放，完成后可获得积分。</p></div>
       </div>
-      <TaskGrid tasks={optionalTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
+      <TaskGrid tasks={optionalTasks} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
     </section>
   );
 }
@@ -660,7 +667,7 @@ const speechMaleVoicePattern = /yunxi|yunyang|yunjian|yunfeng|google.*\u666e\u90
 function selectSpeechVoice(voices: SpeechSynthesisVoice[], lang: string) {
   const language = lang.slice(0, 2).toLowerCase();
   const languageVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(language));
-  const candidates = languageVoices.length > 0 ? languageVoices : voices;
+  const candidates = languageVoices;
   const isChinese = lang.toLowerCase().startsWith("zh");
   const labelOf = (voice: SpeechSynthesisVoice) => `${voice.name} ${voice.voiceURI}`;
   const isFemale = (voice: SpeechSynthesisVoice) => {
@@ -1242,7 +1249,7 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
     setRoundCorrect(true);
     if (roundIndex === challenges.length - 1) {
       const score = Math.round((nextFirstTryCorrect / challenges.length) * 100);
-      const ready = score >= 80;
+      const ready = true;
       setFinalScore(score);
       setFinished(true);
       onProgress({ ready, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions, message: ready ? `首次答对${nextFirstTryCorrect}关，成功获得积分资格！` : `首次答对${nextFirstTryCorrect}关，再玩一次就能进步。` });
@@ -1305,7 +1312,7 @@ function LogicOrderGame({ challenge, selected, correct, onBegin, onSubmit }: { c
 }
 
 function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcome: TaskOutcome) => void }) {
-  const config = taskId === "sport-rope" ? { title: "跳绳500个", target: 500, unit: "个" } : taskId === "sport-high-jump" ? { title: "摸高跳200个", target: 200, unit: "个" } : { title: "累计运动60分钟", target: 60, unit: "分钟" };
+  const config = taskId === "sport-rope" ? { title: "跳绳500个", target: 500, unit: "个" } : taskId === "sport-high-jump" ? { title: "摸高跳100个", target: 100, unit: "个" } : { title: "累计运动60分钟", target: 60, unit: "分钟" };
   const [value, setValue] = useState("");
   const ready = Number(value) >= config.target;
   useEffect(() => onProgress({ ready, durationSeconds: taskId === "sport-hour" ? Number(value) * 60 : 0, attempts: 1, wrongQuestions: [], evidence: value ? `填写完成${value}${config.unit}` : undefined, message: ready ? "运动目标达成，可以提交家长审核。" : undefined }), [ready, value, taskId, config.unit, onProgress]);
