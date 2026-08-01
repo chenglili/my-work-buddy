@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Apple,
   BarChart3,
+  Bell,
+  Bird,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -9,16 +12,21 @@ import {
   CloudOff,
   Clock3,
   Gift,
+  Heart,
   LockKeyhole,
   LogOut,
   Mail,
   Play,
+  Package,
   RefreshCw,
   RotateCcw,
   ShoppingBag,
+  SprayCan,
   Smartphone,
   Star,
   Trophy,
+  Utensils,
+  Droplets,
 } from "lucide-react";
 import {
   characterImages,
@@ -30,17 +38,22 @@ import {
   optionalTaskIds,
   sectionMeta,
   taskCatalog,
+  type GameChallenge,
   type TaskCategory,
   type TaskDefinition,
   type ViewKey,
+  wordProblemAnswerMatches,
   wordProblems,
 } from "./appData";
 import { chineseReadings, readingComprehensions, shopRewards } from "./data";
+import { arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
+import type { ReadingQuestion } from "./types/learning";
 import {
   adjustPoints,
   approveAllTaskReviews,
   approveReward,
   approveTaskReview,
+  cancelReward,
   calculateStreak,
   completeTask,
   fulfillReward,
@@ -50,9 +63,12 @@ import {
   isDailyReadyForNotification,
   isWeekend,
   markDailyReadyNotified,
+  interactWithPet,
+  petItemDefinitions,
+  purchasePetItem,
   readStoredState,
   rejectTaskReview,
-  refreshDailyState,
+  rejectReward,
   requestReward,
   STORAGE_KEY,
   submitTaskReview,
@@ -60,6 +76,9 @@ import {
   verifyParentPin,
   type CompletionResultInput,
   type PendingTaskReview,
+  type PetAction,
+  type PetItemId,
+  type PetLastAction,
   type WorkspaceState,
 } from "./state/workspace";
 import { sendDailyReadyNotification } from "./services/dailyNotification";
@@ -79,7 +98,7 @@ interface TaskOutcome extends CompletionResultInput {
 }
 
 const emptyOutcome: TaskOutcome = { ready: false, durationSeconds: 0, attempts: 1, wrongQuestions: [] };
-const sectionKeys: ViewKey[] = ["home", "chinese", "math", "english", "game", "sport", "shop"];
+const sectionKeys: ViewKey[] = ["home", "chinese", "math", "english", "game", "sport", "shop", "pet"];
 const encouragements = [
   "认真完成一小步，今天就更稳一点。",
   "慢慢读、认真写，好习惯会留下来。",
@@ -124,11 +143,11 @@ export default function App() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
+      workspace.refreshLocalDate();
       if (workspace.enabled) void workspace.refresh();
-      else setState((current) => refreshDailyState(current));
     }, 60_000);
     return () => window.clearInterval(id);
-  }, [setState, workspace.enabled, workspace.refresh]);
+  }, [workspace.enabled, workspace.refresh, workspace.refreshLocalDate]);
 
   useEffect(() => {
     setParentSession((current) => current?.dateKey === state.dateKey ? current : null);
@@ -237,7 +256,7 @@ export default function App() {
         <nav>
           {sectionKeys.map((key) => (
             <button key={key} aria-label={sectionMeta[key].label} className={route.view === key && !route.taskId ? "active" : ""} onClick={() => navigate(key)}>
-              <img className="nav-icon-image" src={sectionMeta[key].navIcon} alt="" />
+              <img className={`nav-icon-image${key === "english" ? " nav-icon-english" : ""}${key === "pet" ? " nav-icon-pet" : ""}`} src={sectionMeta[key].navIcon} alt="" />
               <span className="nav-label">{sectionMeta[key].label}</span>
               <span className="nav-mobile-label">{sectionMeta[key].mobileLabel}</span>
             </button>
@@ -255,6 +274,8 @@ export default function App() {
           <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
           <ShopPage state={state} setState={setState} streak={streak} requiredTaskIds={requiredTaskIds} parentSession={parentSession} setParentSession={setParentSession} onVictory={() => setShowVictory(true)} cloud={workspace} />
+        ) : route.view === "pet" ? (
+          <PetPage state={state} setState={setState} cloud={workspace} onToast={setToast} />
         ) : (
           <SectionPage view={route.view} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
         )}
@@ -312,8 +333,45 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
     }
   };
 
+  const confirmMigration = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await workspace.confirmLegacyImport();
+    } catch (migrationError) {
+      setMessage(migrationError instanceof Error ? migrationError.message : "迁移未完成，请稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (workspace.mode === "loading") {
     return <main className="cloud-access-screen"><div className="cloud-access-panel loading"><img src={characterImages.cinnamoroll} alt="" /><RefreshCw className="spin" size={28} /><h1>正在打开甜心工作台</h1></div></main>;
+  }
+
+  if (workspace.mode === "migration" && workspace.legacyPreview) {
+    const preview = workspace.legacyPreview;
+    return (
+      <main className="cloud-access-screen">
+        <section className="cloud-access-panel migration-confirm">
+          <div className="cloud-access-brand"><img src={characterImages["hello-kitty"]} alt="" /><div><p className="eyebrow">首次云端建档</p><h1>确认主迁移设备</h1></div></div>
+          <p>请只在记录最完整的旧设备上确认。确认后，这台设备的数据会成为家庭云端起点。</p>
+          <div className="migration-summary" aria-label="本机待迁移数据摘要">
+            <div><span>当前积分</span><strong>{preview.points}</strong></div>
+            <div><span>完整打卡</span><strong>{preview.completedDays}天</strong></div>
+            <div><span>学习记录</span><strong>{preview.taskResults}条</strong></div>
+            <div><span>待审核</span><strong>{preview.pendingReviews}条</strong></div>
+            <div><span>兑换记录</span><strong>{preview.rewardRequests}条</strong></div>
+            <div><span>本机日期</span><strong>{preview.latestDate}</strong></div>
+          </div>
+          <div className="cloud-access-actions migration-actions">
+            <button className="primary" disabled={busy} onClick={() => void confirmMigration()}>{busy ? <RefreshCw className="spin" size={18} /> : <CheckCircle2 size={18} />}确认从此设备迁移</button>
+            <button className="secondary" disabled={busy} onClick={() => void workspace.signOut()}><LogOut size={18} />退出，换用记录完整的设备</button>
+          </div>
+          {workspace.error || message ? <p className="cloud-access-message">{workspace.error || message}</p> : null}
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -469,10 +527,8 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
 
 function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
   const [outcome, setOutcome] = useState<TaskOutcome>(completed ? { ...emptyOutcome, ready: true } : emptyOutcome);
-  const startedAt = useRef(Date.now());
   useEffect(() => {
     setOutcome(completed ? { ...emptyOutcome, ready: true } : emptyOutcome);
-    startedAt.current = Date.now();
   }, [task.id, completed]);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
@@ -492,7 +548,7 @@ function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, on
         <p className={outcome.ready && eligible ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : syncPending ? "任务已保存在本机，联网后同步并结算正式积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : !eligible ? "今天可以自由练习，这项不计入今日积分。" : outcome.message ?? completionHint(task)}</p>
         <button className="primary big" disabled={!canComplete} onClick={() => onDone({
           ...outcome,
-          durationSeconds: Math.max(outcome.durationSeconds ?? 0, Math.round((Date.now() - startedAt.current) / 1000)),
+          durationSeconds: outcome.durationSeconds ?? 0,
         })}>
           <CheckCircle2 size={20} />{completed ? "今天已完成" : syncPending ? "等待同步" : pending ? "等待家长审核" : !eligible ? "今日自由练习" : task.completionMode === "parent" ? "提交家长审核" : `完成任务 +${task.points}`}
         </button>
@@ -545,7 +601,9 @@ function speak(text: string, lang = "zh-CN") {
   const languageVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
   const preferredNames = lang.startsWith("zh")
     ? ["Xiaoxiao", "晓晓", "Ting-Ting", "Mei-Jia", "Yaoyao", "Huihui", "Google 普通话"]
-    : ["Jenny", "Samantha", "Aria", "Ava", "Google US English"];
+    : lang === "en-GB"
+      ? ["Sonia", "Libby", "Serena", "Stephanie", "Google UK English Female", "Jenny", "Samantha"]
+      : ["Jenny", "Samantha", "Aria", "Ava", "Google US English"];
   utterance.voice = preferredNames.map((name) => languageVoices.find((voice) => voice.name.includes(name))).find(Boolean) ?? languageVoices[0] ?? null;
   utterance.rate = lang.startsWith("zh") ? 0.74 : 0.8;
   utterance.pitch = lang.startsWith("zh") ? 1.08 : 1.03;
@@ -619,8 +677,16 @@ function Dictation({ dateKey, onProgress }: { dateKey: string; onProgress: (outc
   const words = getWeeklyContent(dateFromKey(dateKey)).dictation;
   const [index, setIndex] = useState(0);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [ratings, setRatings] = useState<Record<number, "correct" | "retry">>({});
+  const [replayedIndices, setReplayedIndices] = useState<number[]>([]);
+  const [replayCount, setReplayCount] = useState(0);
   const current = words[index];
   const playCurrent = () => speak(`请写：${current}`);
+  const replayWrongWord = (wordIndex: number) => {
+    speak(`请再写一次：${words[wordIndex]}`);
+    setReplayedIndices((values) => values.includes(wordIndex) ? values : [...values, wordIndex]);
+    setReplayCount((value) => value + 1);
+  };
   const next = () => {
     if (index >= words.length - 1) setShowAnswers(true);
     else {
@@ -628,8 +694,19 @@ function Dictation({ dateKey, onProgress }: { dateKey: string; onProgress: (outc
       window.setTimeout(() => speak(`请写：${words[index + 1]}`), 250);
     }
   };
-  useEffect(() => onProgress({ ready: showAnswers, durationSeconds: 0, attempts: 1, wrongQuestions: [], evidence: showAnswers ? `已完成${words.length}个词语听写并核对` : undefined, message: showAnswers ? "听写全部播报完成，可以提交家长审核。" : undefined }), [showAnswers, words.length, onProgress]);
-  return <div className="panel dictation"><h3>语音听写</h3><p>当前第 {index + 1} / {words.length} 个。播放后留出书写时间，可重复播放。</p><div className="dictation-word">{showAnswers ? "答案已显示" : "请听语音写词语"}</div><div className="inline-actions"><button className="primary" onClick={playCurrent}><Play size={16} />播放词语</button><button className="secondary" onClick={playCurrent}><RotateCcw size={16} />重复播放</button><button className="secondary" onClick={next}>{index >= words.length - 1 ? "显示答案" : "下一个"}</button></div>{showAnswers ? <p className="answer-strip">{words.join("　")}</p> : null}</div>;
+  const wrongIndices = useMemo(() => words.map((_, wordIndex) => ratings[wordIndex] === "retry" ? wordIndex : -1).filter((wordIndex) => wordIndex >= 0), [ratings, words]);
+  const allAssessed = words.every((_, wordIndex) => ratings[wordIndex]);
+  const allWrongReplayed = wrongIndices.every((wordIndex) => replayedIndices.includes(wordIndex));
+  const ready = showAnswers && allAssessed && allWrongReplayed;
+  useEffect(() => onProgress({
+    ready,
+    durationSeconds: 0,
+    attempts: 1 + replayCount,
+    wrongQuestions: wrongIndices.map((wordIndex) => `听写：${words[wordIndex]}`),
+    evidence: showAnswers ? `${words.length}个词，写对${words.length - wrongIndices.length}个，错词重听${replayCount}次` : undefined,
+    message: ready ? "听写自评和错词重听完成，可以提交家长审核。" : showAnswers && !allAssessed ? "请给每个词标记“会写”或“需再练”。" : showAnswers && !allWrongReplayed ? "把标记为“需再练”的词重新听一遍。" : undefined,
+  }), [allAssessed, allWrongReplayed, onProgress, ready, replayCount, showAnswers, words, wrongIndices]);
+  return <div className="panel dictation"><h3>语音听写</h3><p>当前第 {index + 1} / {words.length} 个。播放后留出书写时间，可重复播放。</p><div className="dictation-word">{showAnswers ? "逐词核对" : "请听语音写词语"}</div>{!showAnswers ? <div className="inline-actions"><button className="primary" onClick={playCurrent}><Play size={16} />播放词语</button><button className="secondary" onClick={playCurrent}><RotateCcw size={16} />重复播放</button><button className="secondary" onClick={next}>{index >= words.length - 1 ? "显示答案并自评" : "下一个"}</button></div> : <div className="dictation-review-list">{words.map((word, wordIndex) => <div className="dictation-review-row" key={word}><strong>{word}</strong><div className="dictation-rating" role="group" aria-label={`${word}听写自评`}><button className={ratings[wordIndex] === "correct" ? "selected correct" : "secondary"} onClick={() => setRatings((values) => ({ ...values, [wordIndex]: "correct" }))}>会写</button><button className={ratings[wordIndex] === "retry" ? "selected retry" : "secondary"} onClick={() => setRatings((values) => ({ ...values, [wordIndex]: "retry" }))}>需再练</button></div>{ratings[wordIndex] === "retry" ? <button className={replayedIndices.includes(wordIndex) ? "secondary replayed" : "secondary"} onClick={() => replayWrongWord(wordIndex)}><Play size={15} />{replayedIndices.includes(wordIndex) ? "已重听" : "重听一次"}</button> : null}</div>)}</div>}</div>;
 }
 
 function NightReading({ dateKey, minimumDuration, onProgress }: { dateKey: string; minimumDuration: number; onProgress: (outcome: TaskOutcome) => void }) {
@@ -653,34 +730,55 @@ function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; o
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [checked, setChecked] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [missingHints, setMissingHints] = useState<Record<string, string[]>>({});
+  const changeAnswer = (questionId: string, value: string) => {
+    setAnswers((current) => ({ ...current, [questionId]: value }));
+    setChecked(false);
+    onProgress({ ...emptyOutcome, attempts, message: "答案已修改，请重新核对。" });
+  };
   const check = () => {
-    const correct = item.questions.filter((question) => question.options ? answers[question.id] === question.answer : Boolean(answers[question.id]?.trim())).length;
+    const results = item.questions.map((questionValue) => {
+      const question = questionValue as ReadingQuestion;
+      if (question.type === "choice") return { question, correct: answers[question.id] === question.answer, missing: [] as string[] };
+      const match = matchKeywordGroups(answers[question.id] ?? "", question.keywordGroups ?? [[question.answer]]);
+      return { question, correct: match.correct, missing: match.missingGroups.map((group) => group[0]) };
+    });
+    const correct = results.filter((result) => result.correct).length;
     const score = Math.round((correct / item.questions.length) * 100);
     const nextAttempts = attempts + 1;
     setChecked(true);
     setAttempts(nextAttempts);
-    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: item.questions.filter((question) => question.options ? answers[question.id] !== question.answer : !answers[question.id]?.trim()).map((question) => question.prompt), message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再试一次会更好。` });
+    setMissingHints(Object.fromEntries(results.filter((result) => result.missing.length).map((result) => [result.question.id, result.missing])));
+    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: results.filter((result) => !result.correct).map((result) => result.question.prompt), message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，补全要点再试一次。` });
   };
-  return <div className="panel"><h3>{item.title}</h3>{item.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}{item.questions.map((question) => <div className="question" key={question.id}><p>{question.prompt}</p>{question.options ? question.options.map((option) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => setAnswers({ ...answers, [question.id]: option })} />{option}</label>) : <input value={answers[question.id] ?? ""} onChange={(event) => setAnswers({ ...answers, [question.id]: event.target.value })} placeholder="用一句话回答" />}{checked ? <p className="answer">答案：{question.answer}。{question.explanation}</p> : null}</div>)}<button className="secondary" onClick={check}>核对答案解析</button></div>;
+  return <div className="panel"><h3>{item.title}</h3>{item.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}{item.questions.map((question) => <div className="question" key={question.id}><p>{question.prompt}</p>{question.options ? question.options.map((option) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => changeAnswer(question.id, option)} />{option}</label>) : <input value={answers[question.id] ?? ""} onChange={(event) => changeAnswer(question.id, event.target.value)} placeholder="用一句话回答" />}{checked && missingHints[question.id]?.length ? <p className="gentle-retry">还缺少这些要点：{missingHints[question.id].join("、")}</p> : null}{checked ? <p className="answer">参考答案：{question.answer}。{question.explanation}</p> : null}</div>)}<button className="secondary" onClick={check}>核对答案解析</button></div>;
 }
 
 function Arithmetic({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const questions = useMemo(() => generateArithmetic(dateKey, 20), [dateKey]);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [checked, setChecked] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [initialWrongIndices, setInitialWrongIndices] = useState<number[] | null>(null);
   const [retryIndices, setRetryIndices] = useState<number[]>([]);
-  const displayedIndices = retryIndices.length ? retryIndices : questions.map((_, index) => index);
+  const displayedIndices = initialWrongIndices === null ? questions.map((_, index) => index) : retryIndices;
   const check = () => {
-    const wrong = questions.map((question, index) => Number(answers[index]) === question.answer ? -1 : index).filter((index) => index >= 0);
-    const score = Math.round(((questions.length - wrong.length) / questions.length) * 100);
     const nextAttempts = attempts + 1;
     setAttempts(nextAttempts);
-    setChecked(true);
-    setRetryIndices(wrong);
-    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((index) => questions[index].prompt), message: score >= 80 ? `正确率${score}%，已经达标。错题可以继续重练。` : `正确率${score}%，请完成下面的错题重练。` });
+    if (initialWrongIndices === null) {
+      const wrong = findWrongArithmeticIndices(questions, answers);
+      const firstScore = arithmeticScore(questions.length, wrong.length);
+      setInitialWrongIndices(wrong);
+      setRetryIndices(wrong);
+      onProgress({ ready: wrong.length === 0, score: firstScore, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((wrongIndex) => questions[wrongIndex].prompt), message: wrong.length ? `首次正确率${firstScore}%，请完成${wrong.length}道错题重练。` : "20道全部答对，可以完成任务。" });
+      return;
+    }
+    const unresolved = findWrongArithmeticIndices(questions, answers, retryIndices);
+    const firstScore = arithmeticScore(questions.length, initialWrongIndices.length);
+    const score = arithmeticScore(questions.length, unresolved.length);
+    setRetryIndices(unresolved);
+    onProgress({ ready: unresolved.length === 0, score, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: initialWrongIndices.map((wrongIndex) => questions[wrongIndex].prompt), message: unresolved.length ? `已经改对一些，还有${unresolved.length}道再算一次。` : "错题已经全部改对，可以完成任务。" });
   };
-  return <div className="panel"><h3>{retryIndices.length ? `错题专项重练 ${retryIndices.length}道` : "100以内正整数加减法 20道"}</h3><div className="arithmetic-grid">{displayedIndices.map((index) => { const question = questions[index]; return <label key={`${question.prompt}-${index}`}><span>{question.prompt}</span><input inputMode="numeric" value={answers[index] ?? ""} onChange={(event) => setAnswers({ ...answers, [index]: event.target.value.replace(/\D/g, "") })} />{checked ? <b>{question.answer}</b> : null}</label>; })}</div><button className="primary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+  return <div className="panel"><h3>{initialWrongIndices === null ? "100以内正整数加减法 20道" : retryIndices.length ? `错题专项重练 ${retryIndices.length}道` : "错题全部改对"}</h3>{displayedIndices.length ? <div className="arithmetic-grid">{displayedIndices.map((questionIndex) => { const question = questions[questionIndex]; return <label key={`${question.prompt}-${questionIndex}`}><span>{question.prompt}</span><input inputMode="numeric" value={answers[questionIndex] ?? ""} onChange={(event) => setAnswers({ ...answers, [questionIndex]: event.target.value.replace(/\D/g, "") })} /></label>; })}</div> : <div className="mastery-finish"><CheckCircle2 size={30} /><strong>每一道错题都认真改正啦</strong></div>}<button className="primary" disabled={initialWrongIndices !== null && retryIndices.length === 0} onClick={check}>{initialWrongIndices === null ? "核对答案" : "核对错题"}</button></div>;
 }
 
 function normalizeAnswer(value: string) {
@@ -694,19 +792,30 @@ function answerMatches(input: string, answer: string) {
   return normalizedInput === normalizedAnswer || (numeric !== undefined && normalizedInput === numeric);
 }
 
-function AutoPractice({ title, items, onProgress }: { title: string; items: string[][]; onProgress: (outcome: TaskOutcome) => void }) {
+interface AutoPracticeItem {
+  prompt: string;
+  answer: string;
+  isCorrect?: (input: string) => boolean;
+}
+
+function AutoPractice({ title, items, guide, placeholder = "写答案", onProgress }: { title: string; items: AutoPracticeItem[]; guide?: string; placeholder?: string; onProgress: (outcome: TaskOutcome) => void }) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [checked, setChecked] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const check = () => {
-    const wrong = items.map(([prompt, answer], index) => answerMatches(answers[index] ?? "", answer) ? "" : prompt).filter(Boolean);
+    const wrong = items.map((item, index) => (item.isCorrect?.(answers[index] ?? "") ?? answerMatches(answers[index] ?? "", item.answer)) ? "" : item.prompt).filter(Boolean);
     const score = Math.round(((items.length - wrong.length) / items.length) * 100);
     const nextAttempts = attempts + 1;
     setChecked(true);
     setAttempts(nextAttempts);
     onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再试一次会更好。` });
   };
-  return <div className="panel"><h3>{title}</h3>{items.map(([prompt, answer], index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => setAnswers({ ...answers, [index]: event.target.value })} placeholder="写答案" />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+  const changeAnswer = (index: number, value: string) => {
+    setAnswers((current) => ({ ...current, [index]: value }));
+    setChecked(false);
+    onProgress({ ...emptyOutcome, attempts, message: "答案已修改，请重新核对。" });
+  };
+  return <div className="panel"><h3>{title}</h3>{guide ? <p className="practice-guide">{guide}</p> : null}{items.map(({ prompt, answer }, index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder={placeholder} />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
 function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
@@ -714,16 +823,16 @@ function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: 
   const facts = Array.from({ length: 30 }, (_, index) => ({ first: 1 + (index % 6), second: 1 + Math.floor(index / 6) }));
   const selected = Array.from({ length: 5 }, (_, index) => facts[(daySeed * 5 + index) % facts.length]);
   const items = selected.flatMap(({ first, second }) => [
-    [`${first} × ${second} =`, String(first * second)],
-    [`${first * second} ÷ ${first} =`, String(second)],
+    { prompt: `${first} × ${second} =`, answer: String(first * second) },
+    { prompt: `${first * second} ÷ ${first} =`, answer: String(second) },
   ]);
   return <AutoPractice title="1–6乘法口诀 · 每日10题" onProgress={onProgress} items={items} />;
 }
 
 function WordProblems({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const offset = (Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000) * 5) % wordProblems.length;
-  const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((item) => [item.prompt, item.answer]);
-  return <AutoPractice title="生活化应用题" items={items} onProgress={onProgress} />;
+  const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((problem) => ({ prompt: problem.prompt, answer: problem.answer, isCorrect: (input: string) => wordProblemAnswerMatches(input, problem) }));
+  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" items={items} onProgress={onProgress} />;
 }
 
 function EnglishDaily({ dateKey, minimumDuration, onProgress }: { dateKey: string; minimumDuration: number; onProgress: (outcome: TaskOutcome) => void }) {
@@ -735,7 +844,7 @@ function EnglishDaily({ dateKey, minimumDuration, onProgress }: { dateKey: strin
       <article className="panel english-lesson-head">
         <p className="eyebrow">译林版二年级上册主题预习 · 原创例句</p>
         <h3>{lesson.unit} · {lesson.title}</h3>
-        <p>本周主题：{lesson.topic}</p>
+        <p>本周主题：{lesson.topic} · 6个单词 · 3个核心句型</p>
       </article>
       <article className="panel">
         <h3>核心单词与例句</h3>
@@ -743,8 +852,8 @@ function EnglishDaily({ dateKey, minimumDuration, onProgress }: { dateKey: strin
           <div className="english-line" key={item.word}>
             <div><strong>{item.word}</strong><span>{item.meaning}</span><p>{item.sentence}</p></div>
             <div className="inline-actions">
-              <button className="secondary" onClick={() => speak(item.word, "en-US")}><Play size={16} />单词</button>
-              <button className="secondary" onClick={() => speak(item.sentence, "en-US")}><Play size={16} />例句</button>
+              <button className="secondary" onClick={() => speak(item.word, "en-GB")}><Play size={16} />单词</button>
+              <button className="secondary" onClick={() => speak(item.sentence, "en-GB")}><Play size={16} />例句</button>
             </div>
           </div>
         ))}
@@ -757,11 +866,16 @@ function EnglishDaily({ dateKey, minimumDuration, onProgress }: { dateKey: strin
             <div key={pattern.sentence}>
               <p><strong>{pattern.sentence}</strong></p>
               <p>{pattern.meaning}</p>
-              <button className="secondary" onClick={() => speak(pattern.sentence, "en-US")}><Play size={16} />听句型</button>
+              <button className="secondary" onClick={() => speak(pattern.sentence, "en-GB")}><Play size={16} />听句型</button>
             </div>
           ))}
         </div>
       </article>
+      <article className="panel english-chant">
+        <div><p className="eyebrow">玉桂狗节奏秀</p><h3>拍手跟读三遍</h3><p>{lesson.chant}</p></div>
+        <button className="secondary" onClick={() => speak(lesson.chant, "en-GB")}><Play size={16} />播放节奏句</button>
+      </article>
+      <EnglishSentenceTrain key={`${lesson.unit}-${dateKey}`} lesson={lesson} dateKey={dateKey} />
       <article className="panel">
         <h3>今日跟读任务</h3>
         <ol className="practice-steps">{lesson.tasks.map((task) => <li key={task}>{task}</li>)}</ol>
@@ -777,7 +891,11 @@ function EnglishListeningGame({ lesson }: { lesson: ReturnType<typeof getWeeklyC
   const [missed, setMissed] = useState(false);
   const [finished, setFinished] = useState(false);
   const word = lesson.words[index];
-  const options = useMemo(() => lesson.words.map((item) => item.meaning).sort((a, b) => a.localeCompare(b, "zh-CN")), [lesson]);
+  const options = useMemo(() => {
+    const distractors = lesson.words.filter((item) => item.word !== word.word).map((item) => item.meaning);
+    return [word.meaning, ...Array.from({ length: 3 }, (_, optionIndex) => distractors[(index + optionIndex) % distractors.length])]
+      .sort((a, b) => a.localeCompare(b, "zh-CN"));
+  }, [index, lesson.words, word.meaning, word.word]);
   const choose = (meaning: string) => {
     if (selected === word.meaning) return;
     setSelected(meaning);
@@ -796,11 +914,68 @@ function EnglishListeningGame({ lesson }: { lesson: ReturnType<typeof getWeeklyC
       }
     }, 450);
   };
+  const restart = () => {
+    setIndex(0);
+    setSelected("");
+    setCorrectCount(0);
+    setMissed(false);
+    setFinished(false);
+  };
 
   return (
     <article className="panel english-listening-game">
       <div className="listening-head"><div><p className="eyebrow">趣味加星 · 不影响计时打卡</p><h3>听音辨词 {Math.min(index + 1, lesson.words.length)}/{lesson.words.length}</h3></div><strong><Star size={18} />{correctCount}</strong></div>
-      {finished ? <div className="listening-finish"><img src={characterImages.cinnamoroll} alt="" /><div><h3>听音小挑战完成</h3><p>一次听对 {correctCount} 个。多听一次，耳朵会越来越灵。</p></div></div> : <><button className="primary listen-word" onClick={() => speak(word.word, "en-US")}><Play size={18} />播放第{index + 1}个单词</button><div className="english-quiz-options">{options.map((option) => <button className={selected === option ? (option === word.meaning ? "correct-choice" : "wrong-choice") : "secondary"} key={option} onClick={() => choose(option)}>{option}</button>)}</div>{selected ? <p className={selected === word.meaning ? "answer" : "gentle-retry"}>{selected === word.meaning ? `听对啦：${word.word} 是“${word.meaning}”。` : "再听一次，不着急。"}</p> : null}</>}
+      {finished ? <div className="listening-finish"><img src={characterImages.cinnamoroll} alt="" /><div><h3>听音小挑战完成</h3><p>一次听对 {correctCount} 个。多听一次，耳朵会越来越灵。</p><button className="secondary" onClick={restart}><RotateCcw size={16} />再玩一次</button></div></div> : <><button className="primary listen-word" onClick={() => speak(word.word, "en-GB")}><Play size={18} />播放第{index + 1}个单词</button><div className="english-quiz-options">{options.map((option) => <button className={selected === option ? (option === word.meaning ? "correct-choice" : "wrong-choice") : "secondary"} key={option} onClick={() => choose(option)}>{option}</button>)}</div>{selected ? <p className={selected === word.meaning ? "answer" : "gentle-retry"}>{selected === word.meaning ? `听对啦：${word.word} 是“${word.meaning}”。` : "再听一次，不着急。"}</p> : null}</>}
+    </article>
+  );
+}
+
+function EnglishSentenceTrain({ lesson, dateKey }: { lesson: ReturnType<typeof getWeeklyContent>["english"]; dateKey: string }) {
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [chosenIds, setChosenIds] = useState<number[]>([]);
+  const [feedback, setFeedback] = useState<"idle" | "retry" | "correct">("idle");
+  const [stars, setStars] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const pattern = lesson.patterns[roundIndex];
+  const tokens = useMemo(() => pattern.sentence.trim().split(/\s+/).map((text, id) => ({ id, text })), [pattern.sentence]);
+  const shuffledTokens = useMemo(() => {
+    if (tokens.length < 2) return tokens;
+    const daySeed = Number(dateKey.replace(/-/g, ""));
+    const shift = ((daySeed + roundIndex) % (tokens.length - 1)) + 1;
+    return [...tokens.slice(shift), ...tokens.slice(0, shift)];
+  }, [dateKey, roundIndex, tokens]);
+  const builtSentence = chosenIds.map((id) => tokens[id].text).join(" ");
+  const clear = () => {
+    setChosenIds([]);
+    setFeedback("idle");
+  };
+  const check = () => {
+    const correct = chosenIds.length === tokens.length && chosenIds.every((id, index) => id === index);
+    setFeedback(correct ? "correct" : "retry");
+    if (correct) setStars((value) => value + 1);
+  };
+  const next = () => {
+    if (roundIndex === lesson.patterns.length - 1) setFinished(true);
+    else setRoundIndex((value) => value + 1);
+    clear();
+  };
+  const restart = () => {
+    setRoundIndex(0);
+    setStars(0);
+    setFinished(false);
+    clear();
+  };
+
+  return (
+    <article className="panel english-sentence-game">
+      <div className="listening-head"><div><p className="eyebrow">趣味加星 · 单词小火车</p><h3>组句闯关 {Math.min(roundIndex + 1, lesson.patterns.length)}/{lesson.patterns.length}</h3></div><strong><Star size={18} />{stars}</strong></div>
+      {finished ? <div className="listening-finish"><img src={characterImages.cinnamoroll} alt="" /><div><h3>三列小火车全部到站</h3><p>今天的核心句型已经拼完啦。</p><button className="secondary" onClick={restart}><RotateCcw size={16} />重新挑战</button></div></div> : <>
+        <p className="sentence-meaning">{pattern.meaning}</p>
+        <div className={feedback === "correct" ? "sentence-track correct" : "sentence-track"}>{builtSentence || "点击下面的单词，让小火车排好队"}</div>
+        <div className="word-token-bank">{shuffledTokens.map((token) => <button className="secondary" disabled={chosenIds.includes(token.id) || feedback === "correct"} key={`${token.text}-${token.id}`} onClick={() => { setChosenIds((value) => [...value, token.id]); setFeedback("idle"); }}>{token.text}</button>)}</div>
+        <div className="inline-actions sentence-actions"><button className="secondary" disabled={!chosenIds.length || feedback === "correct"} onClick={clear}><RotateCcw size={16} />重新排列</button>{feedback === "correct" ? <button className="primary" onClick={next}><CheckCircle2 size={16} />{roundIndex === lesson.patterns.length - 1 ? "完成闯关" : "下一句"}</button> : <button className="primary" disabled={chosenIds.length !== tokens.length} onClick={check}>检查顺序</button>}</div>
+        {feedback === "correct" ? <p className="answer">顺序正确，收下一颗句型星！</p> : feedback === "retry" ? <p className="gentle-retry">顺序还差一点，重新排一排就好。</p> : null}
+      </>}
     </article>
   );
 }
@@ -889,14 +1064,8 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
         </div>
       ) : (
         <>
-          <GameScene taskId={taskId} question={challenge.question} />
-          <div className="game-options">
-            {challenge.options.map((option) => {
-              const choiceClass = selected === option ? (roundCorrect ? "correct-choice" : "wrong-choice") : "";
-              return <button className={`game-option ${choiceClass}`} disabled={roundCorrect} key={option} onClick={() => choose(option)}>{option}</button>;
-            })}
-          </div>
-          {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：慢慢读题，答案就在选项里。"}</p> : <p className="muted game-feedback">选一个你认为正确的答案。</p>}
+          <GameRound key={challenge.question} challenge={challenge} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
+          {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：看看画面里的线索。"}</p> : <p className="muted game-feedback">按画面提示完成这一关。</p>}
           {roundCorrect && roundIndex < challenges.length - 1 ? <button className="primary game-next" onClick={nextRound}>下一关 <ArrowLeft className="next-arrow" size={18} /></button> : null}
         </>
       )}
@@ -904,11 +1073,23 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
   );
 }
 
-function GameScene({ taskId, question }: { taskId: string; question: string }) {
-  if (taskId === "game-hanzi") return <div className="game-scene"><div className="game-character"><img src={characterImages["my-melody"]} alt="" /><span>{question.match(/“(.+?)”/)?.[1]}</span></div><div className="game-baskets"><span>人物篮</span><span>地点篮</span><span>动作篮</span></div></div>;
-  if (taskId === "game-number") return <div className="game-scene number-train"><span>数字小火车</span><strong>{question}</strong></div>;
-  if (taskId === "game-spot") return <div className="game-scene spot-board"><span>仔细找一找</span><strong>{question.replace(" 中哪一个不同？", "")}</strong></div>;
-  return <div className="game-scene logic-board"><img src={characterImages.kuromi} alt="" /><div><span>逻辑侦探线索</span><strong>{question}</strong></div></div>;
+function GameRound({ challenge, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+  if (challenge.kind === "classify") return <div className="game-interaction classify-game"><div className="game-character"><img src={characterImages["my-melody"]} alt="" /><span>{challenge.item}</span></div><p>{challenge.question}</p><div className="game-baskets" role="group" aria-label="汉字分类篮子">{challenge.baskets.map((basket) => <button className={selected === basket ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={basket} onClick={() => onSubmit(basket)}><span>{basket === "人物" ? "人物篮" : basket === "地点" ? "地点篮" : "动作篮"}</span></button>)}</div></div>;
+  if (challenge.kind === "number-path") return <div className="game-interaction number-path-game"><p>{challenge.question}</p><div className="number-route">{challenge.path.map((value, index) => <span className={value === null ? "missing" : ""} key={`${value}-${index}`}>{value ?? "?"}</span>)}</div><div className="number-candidates" role="group" aria-label="数字路线候选答案">{challenge.options.map((option) => <button className={selected === String(option) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(String(option))}>{option}</button>)}</div></div>;
+  if (challenge.kind === "spot") return <div className="game-interaction spot-game"><p>{challenge.question}</p><div className="spot-grid" role="group" aria-label="找不同九宫格">{challenge.tiles.map((tile, index) => <button aria-label={`第${index + 1}格 ${tile}`} className={selected === String(index) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={`${tile}-${index}`} onClick={() => onSubmit(String(index))}>{tile}</button>)}</div></div>;
+  return <LogicOrderGame challenge={challenge} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
+}
+
+function LogicOrderGame({ challenge, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "order" }>; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+  const [orderedCards, setOrderedCards] = useState<string[]>([]);
+  useEffect(() => {
+    if (selected && !correct) setOrderedCards([]);
+  }, [correct, selected]);
+  const chooseCard = (card: string) => {
+    if (!orderedCards.length) onBegin();
+    setOrderedCards((cards) => [...cards, card]);
+  };
+  return <div className="game-interaction order-game"><div className="logic-clue"><img src={characterImages.kuromi} alt="" /><p>{challenge.question}</p></div><div className={correct ? "order-track correct" : "order-track"}>{challenge.correctOrder.map((_, index) => <span key={index}>{orderedCards[index] ?? index + 1}</span>)}</div><div className="order-cards">{challenge.cards.map((card) => <button className="secondary" disabled={correct || orderedCards.includes(card)} key={card} onClick={() => chooseCard(card)}>{card}</button>)}</div><div className="inline-actions"><button className="secondary" disabled={correct || !orderedCards.length} onClick={() => { setOrderedCards([]); onBegin(); }}><RotateCcw size={16} />重新排序</button><button className="primary" disabled={correct || orderedCards.length !== challenge.cards.length} onClick={() => onSubmit(orderedCards.join("|"))}>检查顺序</button></div></div>;
 }
 
 function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcome: TaskOutcome) => void }) {
@@ -917,6 +1098,144 @@ function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcom
   const ready = Number(value) >= config.target;
   useEffect(() => onProgress({ ready, durationSeconds: taskId === "sport-hour" ? Number(value) * 60 : 0, attempts: 1, wrongQuestions: [], evidence: value ? `填写完成${value}${config.unit}` : undefined, message: ready ? "运动目标达成，可以提交家长审核。" : undefined }), [ready, value, taskId, config.unit, onProgress]);
   return <div className="panel"><h3>{config.title}</h3><p>运动前先热身，完成后提交到今日家长审核。动作不舒服时应立即停止。</p><label>完成数量或时长（{config.unit}）<input className="wide-input" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value.replace(/\D/g, ""))} placeholder={`目标${config.target}${config.unit}`} /></label></div>;
+}
+
+function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; cloud: CloudWorkspaceController; onToast: (message: string) => void }) {
+  const [busy, setBusy] = useState("");
+  const [motion, setMotion] = useState<PetLastAction>("idle");
+  const [motionKey, setMotionKey] = useState(0);
+  const pet = state.pet;
+  const itemCount = (itemId: PetItemId) => pet.inventory[itemId] ?? 0;
+  const hasToy = pet.ownedToys.includes("bell-toy");
+
+  const animate = (action: PetLastAction) => {
+    setMotion(action);
+    setMotionKey((value) => value + 1);
+  };
+
+  const buyItem = async (itemId: PetItemId) => {
+    const item = petItemDefinitions.find((candidate) => candidate.id === itemId)!;
+    setBusy(`buy-${itemId}`);
+    try {
+      if (cloud.enabled) await cloud.purchasePetItem(itemId);
+      else {
+        const next = purchasePetItem(state, itemId);
+        if (!next) throw new Error(item.kind === "toy" && pet.ownedToys.includes(itemId) ? "already owned" : "insufficient points");
+        setState(next);
+      }
+      animate("purchase");
+      onToast(`${item.name}已购买，花费${item.price}积分。`);
+    } catch (error) {
+      onToast(petOperationError(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const interact = async (action: PetAction, itemId: PetItemId, successMessage: string) => {
+    setBusy(`${action}-${itemId}`);
+    try {
+      if (cloud.enabled) await cloud.interactPet(action, itemId);
+      else {
+        const next = interactWithPet(state, action, itemId);
+        if (!next) throw new Error("pet item unavailable");
+        setState(next);
+      }
+      animate(action);
+      onToast(successMessage);
+    } catch (error) {
+      onToast(petOperationError(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const statuses = [
+    { label: "饱腹度", value: pet.satiety, className: "satiety", icon: <Utensils size={19} /> },
+    { label: "开心度", value: pet.happiness, className: "happiness", icon: <Heart size={19} /> },
+    { label: "清洁度", value: pet.cleanliness, className: "cleanliness", icon: <Droplets size={19} /> },
+  ];
+  const interactions: Array<{ action: PetAction; itemId: PetItemId; label: string; detail: string; disabled: boolean; success: string }> = [
+    { action: "feed", itemId: "parrot-food", label: "喂鹦鹉粮", detail: itemCount("parrot-food") ? `库存 ${itemCount("parrot-food")} 份` : "本鸟的饭碗空着呢", disabled: itemCount("parrot-food") < 1, success: "嘟嘟吃饱了，饱腹度上升。" },
+    { action: "feed", itemId: "apple-bites", label: "喂苹果粒", detail: itemCount("apple-bites") ? `库存 ${itemCount("apple-bites")} 份` : "没有苹果，笑容暂停", disabled: itemCount("apple-bites") < 1, success: "苹果粒投喂成功，嘟嘟心情大好。" },
+    { action: "play", itemId: "bell-toy", label: "摇铃逗玩", detail: hasToy ? "叮当铃已就位" : "缺一件响当当的玩具", disabled: !hasToy, success: "嘟嘟追着铃声蹦了起来。" },
+    { action: "bathe", itemId: "bath-spray", label: "洗香香", detail: itemCount("bath-spray") ? `喷雾 ${itemCount("bath-spray")} 瓶` : "羽毛水疗用品告急", disabled: itemCount("bath-spray") < 1, success: "洗澡完成，嘟嘟的羽毛又精神了。" },
+  ];
+
+  return (
+    <section className="pet-page">
+      <header className="pet-page-heading">
+        <div><p className="eyebrow">今日营业中</p><h2>{pet.name}的小屋</h2><p>嘟嘟正在巡视地盘，顺便检查今天的零食库存。</p></div>
+        <div className="pet-balance"><Star size={21} /><span>可用积分</span><strong>{state.points}</strong></div>
+      </header>
+
+      <section className="pet-habitat" aria-label="嘟嘟的互动空间">
+        <div className="pet-stage">
+          <div className="pet-speech" aria-live="polite" aria-atomic="true"><Bird size={22} /><p>{pet.lastMessage}</p></div>
+          <figure>
+            <div className="pet-photo" role="img" aria-label={`${pet.name}，一只站在木质鸟架上的小太阳鹦鹉`}>
+              <img key={`${motion}-${motionKey}`} className={`pet-character pet-motion-${motion}`} src="pets/sun-conure-cutout-v4.webp" alt="" />
+              <img className="pet-perch-foreground" src="pets/sun-conure-perch-front-v2.png" alt="" />
+            </div>
+            <figcaption><strong>{pet.name}</strong><small>{petStatusTitle(pet.satiety, pet.happiness, pet.cleanliness)}</small></figcaption>
+          </figure>
+        </div>
+
+        <div className="pet-care-panel">
+          <div className="pet-status-heading"><div><p className="eyebrow">实时状态</p><h3>今天也要神气登场</h3></div><img src="pets/sun-conure-avatar-256.webp" alt="" /></div>
+          <div className="pet-status-list">
+            {statuses.map((status) => <div className="pet-status" key={status.label}><div><span>{status.icon}{status.label}</span><strong>{status.value}</strong></div><div className={`pet-status-track ${status.className}`} role="progressbar" aria-label={status.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={status.value}><span style={{ width: `${status.value}%` }} /></div></div>)}
+          </div>
+          <div className="pet-actions" aria-label="照顾嘟嘟">
+            {interactions.map((option) => <button className={`pet-action pet-action-${option.action}`} key={`${option.action}-${option.itemId}`} disabled={Boolean(busy) || option.disabled} onClick={() => void interact(option.action, option.itemId, option.success)}><PetSupplyIcon itemId={option.itemId} size={23} /><span><strong>{option.label}</strong><small>{busy === `${option.action}-${option.itemId}` ? "嘟嘟正在配合……" : option.detail}</small></span></button>)}
+          </div>
+        </div>
+      </section>
+
+      <section className="pet-inventory-section">
+        <div className="pet-section-heading"><div><p className="eyebrow">嘟嘟的储物架</p><h3><Package size={21} /> 用品库存</h3></div><span>{petItemDefinitions.reduce((total, item) => total + (item.kind === "toy" ? Number(pet.ownedToys.includes(item.id)) : itemCount(item.id)), 0)} 件用品</span></div>
+        <div className="pet-inventory-grid">
+          {petItemDefinitions.map((item) => <article className="pet-inventory-item" key={item.id}><span className={`pet-item-icon pet-item-${item.kind}`}><PetSupplyIcon itemId={item.id} size={24} /></span><div><strong>{item.name}</strong><small>{item.kind === "toy" ? pet.ownedToys.includes(item.id) ? "已永久拥有" : "尚未拥有" : `${itemCount(item.id)} 份`}</small></div></article>)}
+        </div>
+      </section>
+
+      <section className="pet-store-section">
+        <div className="pet-section-heading"><div><p className="eyebrow">积分即时购买</p><h3><ShoppingBag size={21} /> 宠物用品店</h3></div><span>余额 {state.points} 积分</span></div>
+        <div className="pet-store-grid">
+          {petItemDefinitions.map((item) => {
+            const owned = item.kind === "toy" && pet.ownedToys.includes(item.id);
+            const disabled = Boolean(busy) || owned || state.points < item.price;
+            return <article className="pet-product" key={item.id}><span className={`pet-product-icon pet-item-${item.kind}`}><PetSupplyIcon itemId={item.id} size={30} /></span><div className="pet-product-copy"><div><h3>{item.name}</h3><strong><Star size={16} />{item.price}</strong></div><p>{item.description}</p></div><button className={owned ? "secondary pet-buy-button" : "primary pet-buy-button"} disabled={disabled} onClick={() => void buyItem(item.id)}>{owned ? <><CheckCircle2 size={18} />已拥有</> : busy === `buy-${item.id}` ? "正在购买……" : state.points < item.price ? `还差${item.price - state.points}积分` : <><ShoppingBag size={18} />购买</>}</button></article>;
+          })}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function PetSupplyIcon({ itemId, size }: { itemId: PetItemId; size: number }) {
+  if (itemId === "apple-bites") return <Apple size={size} />;
+  if (itemId === "bell-toy") return <Bell size={size} />;
+  if (itemId === "bath-spray") return <SprayCan size={size} />;
+  return <Utensils size={size} />;
+}
+
+function petStatusTitle(satiety: number, happiness: number, cleanliness: number) {
+  const lowest = Math.min(satiety, happiness, cleanliness);
+  if (lowest >= 80) return "羽冠一抬，状态满格";
+  if (lowest >= 55) return "精神不错，等你来玩";
+  if (lowest === satiety) return "正在认真暗示开饭";
+  if (lowest === cleanliness) return "申请一次羽毛水疗";
+  return "需要一点热闹和掌声";
+}
+
+function petOperationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/insufficient points/i.test(message)) return "积分不够，嘟嘟建议先完成一项学习任务。";
+  if (/already owned/i.test(message)) return "叮当铃已经在嘟嘟的玩具架上了。";
+  if (/unavailable|not owned/i.test(message)) return "道具还没准备好，嘟嘟正在用眼神提醒你去商店。";
+  if (/network|fetch|联网|offline/i.test(message)) return "这次操作需要联网，连接恢复后再试一次。";
+  return "嘟嘟刚才走神了，操作没有完成，请再试一次。";
 }
 
 function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, setParentSession, onVictory, cloud }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; streak: number; requiredTaskIds: string[]; parentSession: { dateKey: string; pin: string } | null; setParentSession: (session: { dateKey: string; pin: string } | null) => void; onVictory: () => void; cloud: CloudWorkspaceController }) {
@@ -982,6 +1301,26 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     const next = fulfillReward(state, requestId, parentPin);
     if (!next) setMessage("请输入正确的家长口令。");
     else { setState(next); setMessage("奖励已经兑现并记录。 "); }
+  };
+  const cancelExchange = async (requestId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.cancelReward(requestId); setMessage("兑换申请已撤销，可以重新选择奖励。 "); }
+      catch (cancelError) { setMessage(cancelError instanceof Error ? cancelError.message : "撤销申请失败。"); }
+      return;
+    }
+    const next = cancelReward(state, requestId);
+    if (!next) setMessage("只有待批准的申请可以撤销。");
+    else { setState(next); setMessage("兑换申请已撤销，可以重新选择奖励。 "); }
+  };
+  const rejectExchange = async (requestId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.rejectReward(requestId); setMessage("兑换申请已驳回，孩子可以重新申请。 "); }
+      catch (rejectError) { setMessage(rejectError instanceof Error ? rejectError.message : "驳回申请失败。"); }
+      return;
+    }
+    const next = rejectReward(state, requestId, parentPin);
+    if (!next) setMessage("只有待批准的申请可以驳回，请确认家长口令。");
+    else { setState(next); setMessage("兑换申请已驳回，孩子可以重新申请。 "); }
   };
   const unlockParent = () => {
     if (!verifyParentPin(state, pin, reportDate)) {
@@ -1093,7 +1432,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       {shopTab === "rewards" ? (
         <div className="reward-grid">
           {rewards.map((reward) => {
-            const activeRequest = state.rewardRequests.some((request) => request.rewardId === reward.id && request.status !== "fulfilled");
+            const activeRequest = state.rewardRequests.some((request) => request.rewardId === reward.id && (request.status === "pending" || request.status === "approved"));
             const character = reward.id === "reward-snack" ? "my-melody" : reward.id === "reward-cartoon-30" ? "cinnamoroll" : "hello-kitty";
             return (
               <article className="reward-card" key={reward.id}>
@@ -1113,7 +1452,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
             <div className="month-calendar"><div className="calendar-weekdays">{["一", "二", "三", "四", "五", "六", "日"].map((weekday) => <span key={weekday}>{weekday}</span>)}</div><div className="calendar-days">{calendarDays.map((item, index) => item ? (() => { const points = state.dailyEarnedPoints[item.dateKey] ?? 0; const future = item.dateKey > state.dateKey; const completed = state.completedDates.includes(item.dateKey); return <div className={`calendar-day${completed ? " checked" : ""}${item.dateKey === state.dateKey ? " today" : ""}`} aria-label={`${item.dateKey}，${future ? "尚未到达" : `获得${points}积分`}${completed ? "，已完成全套任务" : ""}`} key={item.dateKey}><strong>{item.day}</strong>{completed ? <CheckCircle2 className="calendar-check" size={14} /> : null}<span>{future ? "" : `${points}分`}</span></div>; })() : <div className="calendar-day empty" aria-hidden="true" key={`empty-${index}`} />)}</div></div>
             <p className="calendar-note">只统计任务获得的积分；兑换扣分和家长手动调分不会改变这里的记录。</p>
           </section>
-          <section className="record-section"><h3>兑换记录</h3><div className="request-list">{state.rewardRequests.length ? state.rewardRequests.map((request) => <div className="request-row" key={request.id}><div><strong>{request.rewardName}</strong><p>{formatDate(request.requestedAt.slice(0, 10))} · {request.cost}积分</p></div><span className={`status-chip ${request.status}`}>{request.status === "pending" ? "待家长批准" : request.status === "approved" ? "待兑现" : "已兑现"}</span></div>) : <div className="empty-record"><img src={characterImages["my-melody"]} alt="" /><p>还没有兑换记录，先完成今天的小目标吧。</p></div>}</div></section>
+          <section className="record-section"><h3>兑换记录</h3><div className="request-list">{state.rewardRequests.length ? state.rewardRequests.map((request) => <div className="request-row" key={request.id}><div><strong>{request.rewardName}</strong><p>{formatDate(request.requestedAt.slice(0, 10))} · {request.cost}积分</p></div><div className="request-actions"><span className={`status-chip ${request.status}`}>{rewardStatusLabel(request.status)}</span>{request.status === "pending" && (!cloud.enabled || cloud.role === "child_device") ? <button className="secondary compact-button" onClick={() => void cancelExchange(request.id)}>撤销申请</button> : null}</div></div>) : <div className="empty-record"><img src={characterImages["my-melody"]} alt="" /><p>还没有兑换记录，先完成今天的小目标吧。</p></div>}</div></section>
           <section className="record-section"><h3><Trophy size={20} /> 坚持勋章</h3><div className="badge-row">{[7, 14, 30].map((days) => <span className={badges.includes(days) ? "badge unlocked" : "badge"} key={days}>{days}天</span>)}</div><p>{badges.length ? `已解锁${badges.join("天、")}天坚持勋章。` : `还差${Math.max(0, 7 - streak)}天解锁第一枚勋章。`}</p></section>
         </div>
       ) : null}
@@ -1125,7 +1464,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
               <div className="parent-section-head"><div><p className="eyebrow">批准后才会发放对应积分</p><h3>今日学习审核 · {state.pendingTaskReviews.length}项待审</h3></div><div className="inline-actions"><button className="primary" disabled={!state.pendingTaskReviews.length} onClick={() => void approveAllLearning()}>一键批准全部</button><button className="secondary" onClick={lockParent}>{cloud.enabled ? "返回奖励货架" : "退出家长中心"}</button></div></div>
               <div className="learning-review-list">{state.pendingTaskReviews.length ? state.pendingTaskReviews.map((review) => <div className="learning-review-row" key={review.id}><div><strong>{review.taskTitle}</strong><p>{formatTaskReviewEvidence(review)} · 提交于{new Date(review.submittedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</p><span>批准后 +{review.points}积分</span></div><div className="review-actions"><button className="secondary" onClick={() => rejectLearning(review.id)}>退回重做</button><button className="primary" onClick={() => approveLearning(review.id)}>批准 +{review.points}</button></div></div>) : <div className="empty-record"><img src={characterImages.cinnamoroll} alt="" /><p>今天没有待审核任务。自动判分题达标后会直接发积分。</p></div>}</div>
             </section>
-            <section className="parent-section"><h3>兑换审批</h3><div className="request-list">{state.rewardRequests.filter((request) => request.status !== "fulfilled").length ? state.rewardRequests.filter((request) => request.status !== "fulfilled").map((request) => <div className="request-row" key={request.id}><span><strong>{request.rewardName}</strong> · {request.cost}积分 · {request.status === "pending" ? "待批准" : "待兑现"}</span>{request.status === "pending" ? <button className="primary" onClick={() => approve(request.id)}>批准兑换</button> : <button className="secondary" onClick={() => fulfill(request.id)}>确认已兑现</button>}</div>) : <p className="muted">暂无待处理申请。</p>}</div></section>
+            <section className="parent-section"><h3>兑换审批</h3><div className="request-list">{state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").length ? state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").map((request) => <div className="request-row" key={request.id}><span><strong>{request.rewardName}</strong> · {request.cost}积分 · {request.status === "pending" ? "待批准" : "待兑现"}</span>{request.status === "pending" ? <div className="review-actions"><button className="secondary" onClick={() => void rejectExchange(request.id)}>驳回</button><button className="primary" onClick={() => void approve(request.id)}>批准兑换</button></div> : <button className="secondary" onClick={() => void fulfill(request.id)}>确认已兑现</button>}</div>) : <p className="muted">暂无待处理申请。</p>}</div></section>
             <div className="parent-dashboard">
               <section className="parent-section learning-report"><div className="report-heading"><h3><BarChart3 size={20} /> 学习报告总结</h3><div className="report-switch" role="tablist" aria-label="学习报告周期"><button className={reportPeriod === "day" ? "active" : ""} role="tab" aria-selected={reportPeriod === "day"} onClick={() => setReportPeriod("day")}>本日</button><button className={reportPeriod === "week" ? "active" : ""} role="tab" aria-selected={reportPeriod === "week"} onClick={() => setReportPeriod("week")}>本周</button><button className={reportPeriod === "month" ? "active" : ""} role="tab" aria-selected={reportPeriod === "month"} onClick={() => setReportPeriod("month")}>本月</button></div></div><div className="report-metrics"><div><span>完成任务</span><strong>{report.taskCount}项</strong></div><div><span>完整打卡</span><strong>{report.completedDays}天</strong></div><div><span>有效时长</span><strong>{Math.round(report.totalDurationSeconds / 60)}分钟</strong></div><div><span>口算正确率</span><strong>{report.arithmeticAverage ? `${report.arithmeticAverage}%` : "暂无"}</strong></div><div><span>获得积分</span><strong>{report.earnedPoints}</strong></div></div><p className="report-summary">{getLearningReportSummary(reportPeriod, report)}</p><p className="report-wrong">主要错题：{report.wrongQuestions.length ? report.wrongQuestions.slice(0, 5).join("、") : "暂无记录"}</p></section>
               <section className="parent-section"><h3>调整积分</h3><p>用于家长补发奖励或修正记录，负数会扣减但不会低于0。</p><input value={adjustment} onChange={(event) => setAdjustment(event.target.value.replace(/[^\d-]/g, ""))} placeholder="例如 10 或 -5" /><button className="secondary" onClick={applyAdjustment}>确认调整</button></section>
@@ -1136,6 +1475,14 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       ) : null}
     </section>
   );
+}
+
+function rewardStatusLabel(status: WorkspaceState["rewardRequests"][number]["status"]) {
+  if (status === "pending") return "待家长批准";
+  if (status === "approved") return "待兑现";
+  if (status === "fulfilled") return "已兑现";
+  if (status === "cancelled") return "已撤销";
+  return "已驳回";
 }
 
 function formatTaskReviewEvidence(review: PendingTaskReview) {

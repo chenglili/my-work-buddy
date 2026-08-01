@@ -1,5 +1,5 @@
 export type TaskCategory = "chinese" | "math" | "english" | "game" | "sport";
-export type ViewKey = "home" | TaskCategory | "shop";
+export type ViewKey = "home" | TaskCategory | "pet" | "shop";
 export type TaskSchedule = "core" | "rotation" | "optional";
 export type CompletionMode = "auto" | "timer" | "parent";
 
@@ -316,6 +316,7 @@ export const sectionMeta: Record<ViewKey, { label: string; mobileLabel: string; 
   english: { label: "英语专区", mobileLabel: "英语", character: "cinnamoroll", navIcon: "characters/cinnamoroll.png" },
   game: { label: "益智游戏", mobileLabel: "游戏", character: "kuromi", navIcon: "characters/keroppi.svg" },
   sport: { label: "运动锻炼", mobileLabel: "运动", character: "hello-kitty", navIcon: "characters/pochacco.svg" },
+  pet: { label: "嘟嘟小屋", mobileLabel: "宠物", character: "hello-kitty", navIcon: "pets/sun-conure-avatar-256.webp" },
   shop: { label: "积分商店", mobileLabel: "商店", character: "my-melody", navIcon: "characters/pompompurin.svg" },
 };
 
@@ -356,6 +357,7 @@ export interface WeeklyContent {
     topic: string;
     words: Array<{ word: string; meaning: string; sentence: string }>;
     patterns: Array<{ sentence: string; meaning: string }>;
+    chant: string;
     tasks: string[];
   };
 }
@@ -383,12 +385,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "uncle", meaning: "叔叔；伯伯；舅舅；姑父", sentence: "He's my uncle." },
         { word: "cousin", meaning: "堂（表）兄弟姐妹", sentence: "She's my cousin." },
         { word: "family", meaning: "家人；家庭", sentence: "This is my family." },
+        { word: "brother", meaning: "哥哥；弟弟", sentence: "He's my brother." },
+        { word: "sister", meaning: "姐姐；妹妹", sentence: "She's my sister." },
       ],
       patterns: [
         { sentence: "Who's she? She's my aunt.", meaning: "她是谁？她是我的姨妈。" },
         { sentence: "Who's he? He's my uncle.", meaning: "他是谁？他是我的叔叔。" },
+        { sentence: "This is my family.", meaning: "这是我的家人。" },
       ],
-      tasks: ["听读4个家庭成员词语", "指着家庭照片介绍一位家人", "用Who's he/she?完成一组问答"],
+      chant: "Aunt and uncle, sister and brother. We are a happy family.",
+      tasks: ["听读6个家庭成员词语", "完成听音辨词", "拼好一个介绍家人的句子", "指着家庭照片介绍一位家人"],
     },
   },
   {
@@ -413,12 +419,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "dog", meaning: "狗", sentence: "I have a dog." },
         { word: "cat", meaning: "猫", sentence: "I have a cat." },
         { word: "hamster", meaning: "仓鼠", sentence: "I have a hamster." },
+        { word: "bird", meaning: "鸟", sentence: "I have a bird." },
+        { word: "fish", meaning: "鱼", sentence: "I have a fish." },
       ],
       patterns: [
         { sentence: "I have a rabbit.", meaning: "我有一只兔子。" },
         { sentence: "It's cute.", meaning: "它很可爱。" },
+        { sentence: "This is my pet.", meaning: "这是我的宠物。" },
       ],
-      tasks: ["听音辨认4种宠物", "选择一种宠物说I have...", "用cute夸一夸小动物"],
+      chant: "A rabbit, a cat, a bird and a dog. I love my little pet.",
+      tasks: ["听音辨认6种宠物", "完成听音辨词", "拼好一个介绍宠物的句子", "选择一种宠物说I have..."],
     },
   },
   {
@@ -443,12 +453,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "ear", meaning: "耳朵", sentence: "It has long ears." },
         { word: "long", meaning: "长的", sentence: "Its ears are long." },
         { word: "short", meaning: "短的；矮的", sentence: "Its tail is short." },
+        { word: "eye", meaning: "眼睛", sentence: "It has big eyes." },
+        { word: "nose", meaning: "鼻子", sentence: "It has a small nose." },
       ],
       patterns: [
         { sentence: "It has a short tail.", meaning: "它有一条短尾巴。" },
         { sentence: "It has long ears.", meaning: "它有长耳朵。" },
+        { sentence: "It has big eyes.", meaning: "它有一双大眼睛。" },
       ],
-      tasks: ["边听边指出耳朵和尾巴", "用long或short描述动物", "完整跟读两个It has...句子"],
+      chant: "Long ears, big eyes, a short tail. Look at my cute animal friend.",
+      tasks: ["边听边指出动物身体部位", "完成听音辨词", "拼好一个It has...句子", "用long或short描述动物"],
     },
   },
   {
@@ -473,12 +487,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "cool", meaning: "凉爽的", sentence: "It's cool." },
         { word: "yellow", meaning: "黄色的", sentence: "The leaves are yellow." },
         { word: "orange", meaning: "橙色的；橙子", sentence: "I see an orange leaf." },
+        { word: "red", meaning: "红色的", sentence: "I see a red leaf." },
+        { word: "leaf", meaning: "树叶", sentence: "This leaf is yellow." },
       ],
       patterns: [
         { sentence: "It's cool in autumn.", meaning: "秋天天气凉爽。" },
         { sentence: "The leaves are yellow.", meaning: "树叶是黄色的。" },
+        { sentence: "I see a red leaf.", meaning: "我看见一片红色的树叶。" },
       ],
-      tasks: ["听读秋天和颜色词语", "观察窗外说一种秋天颜色", "跟读It's...和The leaves are..."],
+      chant: "Red and yellow, orange too. Autumn leaves are falling down.",
+      tasks: ["听读秋天和颜色词语", "完成听音辨词", "拼好一个秋天句子", "观察窗外说一种秋天颜色"],
     },
   },
   {
@@ -503,12 +521,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "milk", meaning: "牛奶", sentence: "Have some milk, please." },
         { word: "water", meaning: "水", sentence: "Have some water, please." },
         { word: "cake", meaning: "蛋糕", sentence: "Have some cake, please." },
+        { word: "pie", meaning: "馅饼", sentence: "Have a pie, please." },
+        { word: "sweet", meaning: "糖果", sentence: "Have a sweet, please." },
       ],
       patterns: [
         { sentence: "Have some juice, please.", meaning: "请喝一些果汁。" },
         { sentence: "Thank you.", meaning: "谢谢你。" },
+        { sentence: "Have a cake, please.", meaning: "请吃一块蛋糕。" },
       ],
-      tasks: ["听音选择食物或饮料", "和家长练习请别人品尝", "收到食物后说Thank you"],
+      chant: "Juice and milk, cake and pie. Have some, please. Thank you!",
+      tasks: ["听音选择食物或饮料", "完成听音辨词", "拼好一个分享食物的句子", "和家长练习请别人品尝"],
     },
   },
   {
@@ -533,12 +555,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "classroom", meaning: "教室", sentence: "This is our classroom." },
         { word: "playground", meaning: "操场", sentence: "This is our playground." },
         { word: "library", meaning: "图书馆", sentence: "I like the library." },
+        { word: "teacher", meaning: "老师", sentence: "This is our teacher." },
+        { word: "friend", meaning: "朋友", sentence: "This is my friend." },
       ],
       patterns: [
         { sentence: "This is our school.", meaning: "这是我们的学校。" },
         { sentence: "We like our school.", meaning: "我们喜欢我们的学校。" },
+        { sentence: "I like the library.", meaning: "我喜欢图书馆。" },
       ],
-      tasks: ["听读3个校园地点", "用This is our...介绍一个地方", "说一说最喜欢的校园地点"],
+      chant: "Classroom, playground, library. We like our happy school.",
+      tasks: ["听读校园人物和地点", "完成听音辨词", "拼好一个介绍校园的句子", "说一说最喜欢的校园地点"],
     },
   },
   {
@@ -563,12 +589,16 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "desk", meaning: "课桌", sentence: "Clean the desk, please." },
         { word: "chair", meaning: "椅子", sentence: "Clean the chair, please." },
         { word: "floor", meaning: "地面", sentence: "The floor is clean." },
+        { word: "door", meaning: "门", sentence: "Clean the door, please." },
+        { word: "window", meaning: "窗户", sentence: "Clean the window, please." },
       ],
       patterns: [
         { sentence: "Let's clean up!", meaning: "我们一起打扫吧！" },
         { sentence: "Clean the desk, please.", meaning: "请擦干净课桌。" },
+        { sentence: "The floor is clean.", meaning: "地面很干净。" },
       ],
-      tasks: ["听指令指出课桌、椅子和地面", "跟读Let's...建议句", "边整理书桌边说一个英语指令"],
+      chant: "Desk and chair, door and floor. Let's clean up together.",
+      tasks: ["听指令指出教室物品", "完成听音辨词", "拼好一个整理指令", "边整理书桌边说一个英语指令"],
     },
   },
   {
@@ -593,49 +623,114 @@ export const weeklyContent: WeeklyContent[] = [
         { word: "nurse", meaning: "护士", sentence: "My mum is a nurse." },
         { word: "teacher", meaning: "老师", sentence: "She's a teacher." },
         { word: "cook", meaning: "厨师", sentence: "He's a cook." },
+        { word: "farmer", meaning: "农民", sentence: "He's a farmer." },
+        { word: "driver", meaning: "司机", sentence: "She's a driver." },
       ],
       patterns: [
         { sentence: "My dad is a doctor.", meaning: "我的爸爸是一名医生。" },
         { sentence: "What is he? He's a cook.", meaning: "他是做什么工作的？他是一名厨师。" },
+        { sentence: "What is she? She's a teacher.", meaning: "她是做什么工作的？她是一名老师。" },
       ],
-      tasks: ["听读4种职业", "用My...is a...介绍家人", "完成一组职业问答"],
+      chant: "Doctor, nurse, teacher, cook. Every job can help us all.",
+      tasks: ["听读6种职业", "完成听音辨词", "拼好一个职业问答句", "用My...is a...介绍家人"],
     },
   },
 ];
 
 export const getWeeklyContent = (value = new Date()) => weeklyContent[getStudySchedule(value).unitIndex % weeklyContent.length];
 
-const problemObjects = ["贴纸", "彩笔", "贝壳", "积木", "卡片", "气球", "书签", "小花", "糖果", "纽扣"];
+const problemObjects = [
+  { item: "贴纸", unit: "张" },
+  { item: "彩笔", unit: "支" },
+  { item: "贝壳", unit: "个" },
+  { item: "积木", unit: "块" },
+  { item: "卡片", unit: "张" },
+  { item: "气球", unit: "个" },
+  { item: "书签", unit: "枚" },
+  { item: "小花", unit: "朵" },
+  { item: "糖果", unit: "颗" },
+  { item: "纽扣", unit: "颗" },
+];
+
+export interface WordProblem {
+  prompt: string;
+  left: number;
+  operator: "+" | "-" | "×" | "÷";
+  right: number;
+  result: number;
+  unit: string;
+  answer: string;
+}
+
+function makeWordProblem(prompt: string, left: number, operator: WordProblem["operator"], right: number, result: number, unit: string): WordProblem {
+  return { prompt, left, operator, right, result, unit, answer: `${left}${operator}${right}=${result}（${unit}）` };
+}
+
+export function wordProblemAnswerMatches(input: string, problem: WordProblem) {
+  const normalized = input.trim().replace(/\s/g, "").replace(/[xX*]/g, "×").replace(/\//g, "÷").replace(/[()（）]/g, "");
+  const match = normalized.match(/^(\d+)([+\-×÷])(\d+)=(\d+)([\u4e00-\u9fff]+)$/);
+  if (!match) return false;
+  const [, rawLeft, operator, rawRight, rawResult, unit] = match;
+  const left = Number(rawLeft);
+  const right = Number(rawRight);
+  const sameOrder = left === problem.left && right === problem.right;
+  const reversedOrder = (problem.operator === "+" || problem.operator === "×") && left === problem.right && right === problem.left;
+  return operator === problem.operator && (sameOrder || reversedOrder) && Number(rawResult) === problem.result && unit === problem.unit;
+}
 
 export const wordProblems = Array.from({ length: 40 }, (_, index) => {
-  const item = problemObjects[index % problemObjects.length];
+  const { item, unit } = problemObjects[index % problemObjects.length];
   const group = Math.floor(index / 10);
   const offset = index % 10;
   if (group === 0) {
     const first = 18 + offset * 3;
     const second = 7 + (offset % 5) * 2;
-    return { prompt: `盒子里有${first}个${item}，又放进${second}个，现在一共有多少个？`, answer: `${first + second}个` };
+    return makeWordProblem(`盒子里有${first}${unit}${item}，又放进${second}${unit}，现在一共有多少${unit}？`, first, "+", second, first + second, unit);
   }
   if (group === 1) {
     const total = 48 + offset * 4;
     const used = 9 + (offset % 6) * 3;
-    return { prompt: `手工课准备了${total}个${item}，用掉${used}个，还剩多少个？`, answer: `${total - used}个` };
+    return makeWordProblem(`手工课准备了${total}${unit}${item}，用掉${used}${unit}，还剩多少${unit}？`, total, "-", used, total - used, unit);
   }
   if (group === 2) {
     const rows = 2 + (offset % 5);
     const each = 2 + (offset % 6);
-    return { prompt: `每排摆${each}个${item}，一共摆了${rows}排，共有多少个？`, answer: `${rows * each}个` };
+    return makeWordProblem(`每排摆${each}${unit}${item}，一共摆了${rows}排，共有多少${unit}？`, each, "×", rows, rows * each, unit);
   }
   const plates = 2 + (offset % 5);
   const each = 2 + (offset % 6);
-  return { prompt: `把${plates * each}个${item}平均放进${plates}个盒子，每个盒子放多少个？`, answer: `${each}个` };
+  return makeWordProblem(`把${plates * each}${unit}${item}平均放进${plates}个盒子，每个盒子放多少${unit}？`, plates * each, "÷", plates, each, unit);
 });
 
-export interface GameChallenge {
+interface GameChallengeBase {
   question: string;
-  options: string[];
   answer: string;
 }
+
+export interface ClassifyGameChallenge extends GameChallengeBase {
+  kind: "classify";
+  item: string;
+  baskets: string[];
+}
+
+export interface NumberPathGameChallenge extends GameChallengeBase {
+  kind: "number-path";
+  path: Array<number | null>;
+  options: number[];
+}
+
+export interface SpotGameChallenge extends GameChallengeBase {
+  kind: "spot";
+  tiles: string[];
+}
+
+export interface OrderGameChallenge extends GameChallengeBase {
+  kind: "order";
+  cards: string[];
+  correctOrder: string[];
+}
+
+export type GameChallenge = ClassifyGameChallenge | NumberPathGameChallenge | SpotGameChallenge | OrderGameChallenge;
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
@@ -655,18 +750,18 @@ const spotPairs = [
 ] as const;
 
 export const gameQuestionBanks: Record<string, GameChallenge[]> = {
-  "game-hanzi": hanziItems.map(([word, answer]) => ({ question: `“${word}”应该放进哪个篮子？`, options: ["人物", "地点", "动作"], answer })),
+  "game-hanzi": hanziItems.map(([word, answer]) => ({ kind: "classify", question: `把“${word}”放进正确的篮子`, item: word, baskets: ["人物", "地点", "动作"], answer })),
   "game-number": Array.from({ length: 40 }, (_, index) => {
     const start = 1 + (index % 8);
     const step = 2 + Math.floor(index / 8);
     const answer = start + step * 4;
-    return { question: `${start}、${start + step}、${start + step * 2}、${start + step * 3}、？`, options: [String(answer - 1), String(answer), String(answer + step)], answer: String(answer) };
+    return { kind: "number-path", question: `从${start}出发，沿着每次加${step}的路线找到下一站`, path: [start, start + step, start + step * 2, start + step * 3, null], options: [answer - 1, answer, answer + step], answer: String(answer) };
   }),
   "game-spot": Array.from({ length: 40 }, (_, index) => {
-    const [same, different] = spotPairs[Math.floor(index / 4)];
-    const position = (index % 4) + 1;
-    const row = Array.from({ length: 4 }, (_, itemIndex) => itemIndex + 1 === position ? different : same).join("　");
-    return { question: `${row} 中哪一个不同？`, options: ["第1个", "第2个", "第3个", "第4个"], answer: `第${position}个` };
+    const [same, different] = spotPairs[index % spotPairs.length];
+    const position = (index * 2 + Math.floor(index / spotPairs.length)) % 9;
+    const tiles = Array.from({ length: 9 }, (_, tileIndex) => tileIndex === position ? different : same);
+    return { kind: "spot", question: `九宫格第${index + 1}关：找出不同的图案`, tiles, answer: String(position) };
   }),
   "game-logic": Array.from({ length: 40 }, (_, index) => {
     const offset = index % names.length;
@@ -674,10 +769,12 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     const second = names[(offset + 1) % names.length];
     const third = names[(offset + 2) % names.length];
     const group = Math.floor(index / names.length);
-    if (group === 0) return { question: `${first}比${second}高，${second}比${third}高，谁最高？`, options: [first, second, third], answer: first };
-    if (group === 1) return { question: `${first}比${second}早到，${third}比${first}晚到，谁最早到？`, options: [first, second, third], answer: first };
-    if (group === 2) return { question: `排队时，${second}在${first}后面，${third}在${second}后面，谁排在最前面？`, options: [first, second, third], answer: first };
-    return { question: `${first}有8颗星，${second}比${first}少2颗，${third}比${second}少1颗，谁的星星最多？`, options: [first, second, third], answer: first };
+    const correctOrder = [first, second, third];
+    const cards = [third, first, second];
+    if (group === 0) return { kind: "order", question: `${first}比${second}高，${second}比${third}高。请从高到矮排序`, cards, correctOrder, answer: correctOrder.join("|") };
+    if (group === 1) return { kind: "order", question: `${first}比${second}早到，${second}比${third}早到。请从早到晚排序`, cards, correctOrder, answer: correctOrder.join("|") };
+    if (group === 2) return { kind: "order", question: `排队时，${second}在${first}后面，${third}在${second}后面。请从前到后排序`, cards, correctOrder, answer: correctOrder.join("|") };
+    return { kind: "order", question: `${first}有8颗星，${second}有6颗，${third}有5颗。请从多到少排序`, cards, correctOrder, answer: correctOrder.join("|") };
   }),
 };
 

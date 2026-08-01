@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, sectionMeta, taskCatalog, weeklyContent, wordProblems } from "../appData";
+import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
 import { generateArithmetic } from "../App";
 import {
   adjustPoints,
@@ -7,6 +7,7 @@ import {
   approveReward,
   approveTaskReview,
   calculateStreak,
+  cancelReward,
   completeTask,
   dailyParentPin,
   fulfillReward,
@@ -17,7 +18,13 @@ import {
   isDailyReadyForNotification,
   markDailyReadyNotified,
   migrateLegacyState,
+  normalizeWorkspaceState,
+  interactWithPet,
+  petItemDefinitions,
+  purchasePetItem,
   refreshDailyState,
+  refreshPetState,
+  rejectReward,
   rejectTaskReview,
   requestReward,
   submitTaskReview,
@@ -166,14 +173,97 @@ describe("workspace state", () => {
 
   it("summarizes daily, weekly, and monthly learning records", () => {
     const augustFirst = day("2026-08-01");
-    const firstDay = completeTask(initialWorkspaceState(augustFirst), "math-arithmetic", 5, ["math-arithmetic"], { score: 80, durationSeconds: 300, wrongQuestions: ["36 + 17 ="] }, augustFirst);
+    const firstDay = completeTask(initialWorkspaceState(augustFirst), "math-arithmetic", 5, ["math-arithmetic"], { score: 100, firstScore: 80, durationSeconds: 300, wrongQuestions: ["36 + 17 ="] }, augustFirst);
     const augustSecond = day("2026-08-02");
-    const secondDay = completeTask(firstDay, "math-arithmetic", 5, ["math-arithmetic"], { score: 100, durationSeconds: 240 }, augustSecond);
+    const secondDay = completeTask(firstDay, "math-arithmetic", 5, ["math-arithmetic"], { score: 100, firstScore: 90, durationSeconds: 240 }, augustSecond);
 
-    expect(getDailyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 1, completedDays: 1, earnedPoints: 20, arithmeticAverage: 100 });
-    expect(getWeeklyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 2, completedDays: 2, earnedPoints: 40, arithmeticAverage: 90 });
-    expect(getMonthlyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 2, completedDays: 2, earnedPoints: 40, arithmeticAverage: 90 });
+    expect(getDailyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 1, completedDays: 1, earnedPoints: 20, arithmeticAverage: 90 });
+    expect(getWeeklyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 2, completedDays: 2, earnedPoints: 40, arithmeticAverage: 85 });
+    expect(getMonthlyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 2, completedDays: 2, earnedPoints: 40, arithmeticAverage: 85 });
     expect(getMonthlyReport(secondDay, augustSecond).wrongQuestions).toEqual(["36 + 17 ="]);
+  });
+});
+
+describe("pet care", () => {
+  it("keeps daily care affordable while preserving a weekly real-reward goal", () => {
+    const monday = day("2026-08-03");
+    const sunday = day("2026-08-09");
+    const pointsFor = (date: Date) => getDailyTaskIds(date)
+      .map((taskId) => taskCatalog.find((task) => task.id === taskId)!.points)
+      .reduce((total, points) => total + points, 15);
+    const food = petItemDefinitions.find((item) => item.id === "parrot-food")!;
+    const spray = petItemDefinitions.find((item) => item.id === "bath-spray")!;
+    const bell = petItemDefinitions.find((item) => item.id === "bell-toy")!;
+    const weeklyBaseline = (pointsFor(monday) * 6) + pointsFor(sunday);
+    const weeklyCareBudget = (food.price * 7) + (spray.price * 4);
+
+    expect(pointsFor(monday)).toBe(47);
+    expect(pointsFor(sunday)).toBe(37);
+    expect(food.price).toBeLessThanOrEqual(5);
+    expect(bell.price).toBeLessThanOrEqual(pointsFor(monday));
+    expect(weeklyBaseline - weeklyCareBudget).toBeGreaterThanOrEqual(250);
+  });
+
+  it("uses 嘟嘟 as the pet name and migrates the previous default", () => {
+    const today = day("2026-08-01");
+    const state = initialWorkspaceState(today);
+    const normalized = normalizeWorkspaceState({ ...state, pet: { ...state.pet, name: "啾啾" } }, today);
+
+    expect(state.pet.name).toBe("嘟嘟");
+    expect(normalized.pet.name).toBe("嘟嘟");
+  });
+
+  it("buys consumables immediately and rejects a purchase without enough points", () => {
+    const today = day("2026-08-01");
+    const funded = { ...initialWorkspaceState(today), points: 20 };
+    const purchased = purchasePetItem(funded, "parrot-food", today)!;
+
+    expect(purchased.points).toBe(15);
+    expect(purchased.pet.inventory["parrot-food"]).toBe(1);
+    expect(purchasePetItem(purchased, "apple-bites", today)).not.toBeNull();
+    expect(purchasePetItem({ ...funded, points: 4 }, "parrot-food", today)).toBeNull();
+  });
+
+  it("unlocks the bell permanently and allows it to be purchased only once", () => {
+    const today = day("2026-08-01");
+    const funded = { ...initialWorkspaceState(today), points: 80 };
+    const purchased = purchasePetItem(funded, "bell-toy", today)!;
+
+    expect(purchased.points).toBe(40);
+    expect(purchased.pet.ownedToys).toEqual(["bell-toy"]);
+    expect(purchasePetItem(purchased, "bell-toy", today)).toBeNull();
+  });
+
+  it("consumes food and bath supplies while keeping the toy", () => {
+    const today = day("2026-08-01");
+    const funded = { ...initialWorkspaceState(today), points: 100 };
+    const withFood = purchasePetItem(funded, "parrot-food", today)!;
+    const fed = interactWithPet(withFood, "feed", "parrot-food", today)!;
+    const withSpray = purchasePetItem(fed, "bath-spray", today)!;
+    const bathed = interactWithPet(withSpray, "bathe", "bath-spray", today)!;
+    const withToy = purchasePetItem(bathed, "bell-toy", today)!;
+    const played = interactWithPet(withToy, "play", "bell-toy", today)!;
+
+    expect(fed.pet.inventory["parrot-food"]).toBe(0);
+    expect(fed.pet.satiety).toBe(86);
+    expect(bathed.pet.inventory["bath-spray"]).toBe(0);
+    expect(bathed.pet.cleanliness).toBe(94);
+    expect(played.pet.ownedToys).toContain("bell-toy");
+    expect(played.pet.happiness).toBe(93);
+    expect(interactWithPet(funded, "feed", "parrot-food", today)).toBeNull();
+    expect(interactWithPet(funded, "play", "bell-toy", today)).toBeNull();
+  });
+
+  it("decreases pet status only once on each crossed date", () => {
+    const firstDay = day("2026-08-01");
+    const secondDay = day("2026-08-02");
+    const state = initialWorkspaceState(firstDay);
+    const refreshed = refreshPetState(state, secondDay);
+    const duplicate = refreshPetState(refreshed, secondDay);
+
+    expect(refreshed.pet).toMatchObject({ satiety: 62, happiness: 71, cleanliness: 76, lastRefreshedDate: "2026-08-02" });
+    expect(duplicate).toBe(refreshed);
+    expect(refreshPetState(duplicate, day("2026-08-03")).pet.satiety).toBe(52);
   });
 });
 
@@ -243,6 +333,43 @@ describe("parent approval and rewards", () => {
     expect(fulfilled.rewardRequests[0].fulfilledAt).toBe(day("2026-08-02").toISOString());
   });
 
+  it("lets a pending request be cancelled and requested again without changing points", () => {
+    const today = day("2026-08-01");
+    const state = { ...initialWorkspaceState(today), points: 120 };
+    const reward = { id: "reward-snack", name: "零食", cost: 80 };
+    const requested = requestReward(state, reward, today)!;
+    const cancelled = cancelReward(requested, requested.rewardRequests[0].id, today)!;
+
+    expect(cancelled.points).toBe(120);
+    expect(cancelled.rewardRequests[0].status).toBe("cancelled");
+    expect(cancelled.rewardRequests[0].cancelledAt).toBe(today.toISOString());
+    expect(cancelReward(cancelled, cancelled.rewardRequests[0].id, today)).toBeNull();
+
+    const later = new Date(today.getTime() + 60_000);
+    expect(requestReward(cancelled, reward, later)?.rewardRequests[0].status).toBe("pending");
+  });
+
+  it("lets a parent reject only pending requests and allows a new request afterwards", () => {
+    const today = day("2026-08-01");
+    const state = { ...initialWorkspaceState(today), points: 120 };
+    const reward = { id: "reward-snack", name: "零食", cost: 80 };
+    const requested = requestReward(state, reward, today)!;
+    const requestId = requested.rewardRequests[0].id;
+
+    expect(rejectReward(requested, requestId, "0000", today)).toBeNull();
+    const rejected = rejectReward(requested, requestId, "0801", today)!;
+    expect(rejected.points).toBe(120);
+    expect(rejected.rewardRequests[0].status).toBe("rejected");
+    expect(rejected.rewardRequests[0].rejectedAt).toBe(today.toISOString());
+
+    const later = new Date(today.getTime() + 60_000);
+    expect(requestReward(rejected, reward, later)).not.toBeNull();
+
+    const approved = approveReward(requested, requestId, "0801", today)!;
+    expect(cancelReward(approved, requestId, today)).toBeNull();
+    expect(rejectReward(approved, requestId, "0801", today)).toBeNull();
+  });
+
   it("uses the current month and day as the PIN for protected adjustments", () => {
     const state = { ...initialWorkspaceState(), points: 10 };
     const augustFirst = day("2026-08-01");
@@ -267,8 +394,33 @@ describe("practice content safeguards", () => {
   });
 
   it("provides 40 questions in every game bank with deterministic five-round sessions", () => {
+    const expectedKinds = {
+      "game-hanzi": "classify",
+      "game-number": "number-path",
+      "game-spot": "spot",
+      "game-logic": "order",
+    } as const;
     for (const [taskId, bank] of Object.entries(gameQuestionBanks)) {
       expect(bank.length).toBeGreaterThanOrEqual(40);
+      expect(new Set(bank.map((challenge) => challenge.kind))).toEqual(new Set([expectedKinds[taskId as keyof typeof expectedKinds]]));
+      for (const challenge of bank) {
+        if (challenge.kind === "classify") {
+          expect(challenge.item.length).toBeGreaterThan(0);
+          expect(challenge.baskets).toContain(challenge.answer);
+        } else if (challenge.kind === "number-path") {
+          expect(challenge.path).toHaveLength(5);
+          expect(challenge.path.at(-1)).toBeNull();
+          expect(challenge.options.map(String)).toContain(challenge.answer);
+        } else if (challenge.kind === "spot") {
+          expect(challenge.tiles).toHaveLength(9);
+          expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
+          expect(Number(challenge.answer)).toBeLessThan(9);
+        } else {
+          expect(challenge.cards).toHaveLength(3);
+          expect(new Set(challenge.cards)).toEqual(new Set(challenge.correctOrder));
+          expect(challenge.answer).toBe(challenge.correctOrder.join("|"));
+        }
+      }
       const first = getGameChallenges(taskId, day("2026-08-03"));
       expect(first).toEqual(getGameChallenges(taskId, day("2026-08-03")));
       expect(first).toHaveLength(5);
@@ -292,32 +444,46 @@ describe("practice content safeguards", () => {
   it("provides 40 age-appropriate integer word problems", () => {
     expect(wordProblems).toHaveLength(40);
     for (const problem of wordProblems) {
-      const answer = Number(problem.answer.match(/^\d+/)?.[0]);
-      expect(Number.isInteger(answer)).toBe(true);
-      expect(answer).toBeGreaterThan(0);
-      expect(answer).toBeLessThanOrEqual(100);
+      expect(Number.isInteger(problem.result)).toBe(true);
+      expect(problem.result).toBeGreaterThan(0);
+      expect(problem.result).toBeLessThanOrEqual(100);
+      expect(problem.answer).toContain("=");
+      expect(problem.answer).toContain(`（${problem.unit}）`);
+      expect(wordProblemAnswerMatches(problem.answer, problem)).toBe(true);
+      expect(wordProblemAnswerMatches(String(problem.result), problem)).toBe(false);
+      expect(wordProblemAnswerMatches(`${problem.left}${problem.operator}${problem.right}=${problem.result}`, problem)).toBe(false);
     }
+  });
+
+  it("accepts common equivalent word-problem equation formats without dropping the unit", () => {
+    const addition = wordProblems.find((problem) => problem.operator === "+")!;
+    const multiplication = wordProblems.find((problem) => problem.operator === "×")!;
+    expect(wordProblemAnswerMatches(`${addition.right}+${addition.left}=${addition.result}${addition.unit}`, addition)).toBe(true);
+    expect(wordProblemAnswerMatches(`${multiplication.right}*${multiplication.left}=${multiplication.result}(${multiplication.unit})`, multiplication)).toBe(true);
+    expect(wordProblemAnswerMatches(`${addition.left}+${addition.right}=${addition.result}个`, addition)).toBe(addition.unit === "个");
   });
 
   it("provides eight complete Yilin Grade 2A English units", () => {
     expect(weeklyContent).toHaveLength(8);
     expect(new Set(weeklyContent.map((content) => content.english.unit)).size).toBe(8);
     for (const content of weeklyContent) {
-      expect(content.english.words.length).toBeGreaterThanOrEqual(4);
-      expect(content.english.patterns.length).toBeGreaterThanOrEqual(2);
-      expect(content.english.tasks.length).toBeGreaterThanOrEqual(3);
+      expect(content.english.words.length).toBeGreaterThanOrEqual(6);
+      expect(new Set(content.english.words.map((word) => word.word)).size).toBe(content.english.words.length);
+      expect(content.english.patterns.length).toBeGreaterThanOrEqual(3);
+      expect(content.english.tasks.length).toBeGreaterThanOrEqual(4);
+      expect(content.english.chant.split(/\s+/).length).toBeGreaterThanOrEqual(6);
     }
   });
 
-  it("uses a different character icon for every navigation item", () => {
+  it("uses a different icon for every navigation item", () => {
     const icons = Object.values(sectionMeta).map((item) => item.navIcon);
-    expect(icons).toHaveLength(7);
-    expect(new Set(icons).size).toBe(7);
+    expect(icons).toHaveLength(8);
+    expect(new Set(icons).size).toBe(8);
   });
 
-  it("provides seven unique short labels for mobile navigation", () => {
+  it("provides eight unique short labels for mobile navigation", () => {
     const labels = Object.values(sectionMeta).map((item) => item.mobileLabel);
-    expect(labels).toEqual(["首页", "语文", "数学", "英语", "游戏", "运动", "商店"]);
-    expect(new Set(labels).size).toBe(7);
+    expect(labels).toEqual(["首页", "语文", "数学", "英语", "游戏", "运动", "宠物", "商店"]);
+    expect(new Set(labels).size).toBe(8);
   });
 });

@@ -63,6 +63,7 @@ export interface ReadingQuestion {
   prompt: string;
   options?: string[];
   answer: string;
+  keywordGroups?: string[][];
   explanation: string;
 }
 

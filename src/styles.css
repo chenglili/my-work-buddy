@@ -25,7 +25,7 @@ textarea {
 }
 
 button {
-  min-height: 42px;
+  min-height: 44px;
   border: 0;
   border-radius: 8px;
   cursor: pointer;
@@ -94,6 +94,15 @@ button:disabled {
   width: 32px;
   height: 32px;
   object-fit: contain;
+}
+
+.nav-icon-image.nav-icon-english {
+  transform: translateX(-2px) scale(1.22);
+}
+
+.nav-icon-image.nav-icon-pet {
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .nav-mobile-label {
@@ -477,6 +486,155 @@ button {
   text-align: center;
 }
 
+.game-interaction {
+  display: grid;
+  gap: 16px;
+  min-height: 250px;
+  padding: 18px;
+  border: 2px solid #efc2d3;
+  border-radius: 8px;
+  background: #fffafd;
+}
+
+.game-interaction > p {
+  margin: 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.classify-game .game-character {
+  justify-content: center;
+}
+
+.game-baskets button,
+.number-candidates button,
+.spot-grid button,
+.order-cards button {
+  min-height: 48px;
+  border: 2px solid #b9dcec;
+  background: #eef9ff;
+  color: #31536b;
+  font-weight: 800;
+}
+
+.game-baskets button {
+  min-height: 82px;
+  padding: 10px 6px;
+  border-color: #d98cac;
+  background: #fff4f8;
+}
+
+.game-baskets button span {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.number-route {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+  align-items: center;
+  gap: 8px;
+}
+
+.number-route span {
+  display: grid;
+  min-height: 54px;
+  place-items: center;
+  border: 2px solid #8cc8de;
+  border-radius: 8px;
+  background: #f0fbff;
+  color: #31536b;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.number-route span.missing {
+  border-style: dashed;
+  background: #fff4c9;
+  color: #755818;
+}
+
+.number-candidates,
+.order-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.spot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(60px, 1fr));
+  gap: 8px;
+  width: min(100%, 360px);
+  margin: 0 auto;
+}
+
+.spot-grid button {
+  aspect-ratio: 1;
+  min-height: 60px;
+  border-color: #efcf72;
+  background: #fffbed;
+  font-size: 30px;
+}
+
+.logic-clue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.logic-clue img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+}
+
+.logic-clue p {
+  max-width: 620px;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.order-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.order-track span {
+  display: grid;
+  min-height: 58px;
+  place-items: center;
+  border: 2px dashed #c2a8b4;
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 800;
+}
+
+.order-track.correct span {
+  border-style: solid;
+  border-color: #55af87;
+  background: #eafbf3;
+  color: #256447;
+}
+
+.game-interaction button.wrong-choice {
+  border-color: #e5aac1;
+  background: #fff1f6;
+  color: #7e5365;
+}
+
+.game-interaction button.correct-choice {
+  border-color: #55af87;
+  background: #eafbf3;
+  color: #256447;
+}
+
 .game-character {
   display: flex;
   align-items: center;
@@ -659,6 +817,47 @@ button {
   font-weight: 800;
 }
 
+.dictation-review-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dictation-review-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.7fr) minmax(180px, 1.4fr) minmax(110px, auto);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid #f0d8e2;
+}
+
+.dictation-review-row strong {
+  font-size: 20px;
+  color: #a93669;
+}
+
+.dictation-rating {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(80px, 1fr));
+  gap: 6px;
+}
+
+.dictation-rating button,
+.dictation-review-row > button {
+  min-height: 44px;
+}
+
+.dictation-rating .selected.correct,
+.dictation-review-row .replayed {
+  background: #e7f8ef;
+  color: #236444;
+}
+
+.dictation-rating .selected.retry {
+  background: #fff0d9;
+  color: #81501d;
+}
+
 .inline-actions,
 .option-row {
   display: flex;
@@ -701,7 +900,7 @@ button {
 }
 
 .mini-check {
-  min-height: 42px;
+  min-height: 44px;
   padding: 7px 10px;
   border-radius: 8px;
   background: #fff3d8;
@@ -809,6 +1008,82 @@ button {
 
 .english-patterns p {
   margin-bottom: 6px;
+}
+
+.practice-guide {
+  margin: 8px 0 2px;
+  padding: 10px 12px;
+  border-left: 4px solid #e4a02f;
+  background: #fff8e8;
+  color: #704e22;
+}
+
+.english-chant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-left: 6px solid #f0b43f;
+  background: #fffaf0;
+}
+
+.english-chant h3 {
+  margin-bottom: 5px;
+}
+
+.english-chant div > p:last-child {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.6;
+}
+
+.english-sentence-game {
+  border: 2px solid #f1c363;
+  background: #fffdf7;
+}
+
+.sentence-meaning {
+  margin: 14px 0 8px;
+  color: #765025;
+  font-weight: 700;
+}
+
+.sentence-track {
+  display: flex;
+  align-items: center;
+  min-height: 62px;
+  padding: 12px;
+  border: 2px dashed #dfb858;
+  border-radius: 8px;
+  background: #fff;
+  color: #826f75;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.sentence-track.correct {
+  border-style: solid;
+  border-color: #55af87;
+  background: #eafbf3;
+  color: #256447;
+  font-weight: 700;
+}
+
+.word-token-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.word-token-bank button {
+  min-height: 44px;
+  padding-inline: 14px;
+  font-size: 17px;
+}
+
+.sentence-actions {
+  margin-top: 12px;
 }
 
 .practice-steps {
@@ -935,12 +1210,24 @@ textarea {
 
 .arithmetic-grid label {
   display: grid;
-  grid-template-columns: 1fr 54px 36px;
+  grid-template-columns: 1fr 58px;
   gap: 4px;
   align-items: center;
   padding: 8px;
   background: #f7fbff;
   border-radius: 8px;
+}
+
+.mastery-finish {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 16px;
+  border: 2px solid #8bcda8;
+  border-radius: 8px;
+  background: #edfaf3;
+  color: #246443;
 }
 
 .sentence {
@@ -1118,7 +1405,7 @@ textarea {
 
 .reward-distance {
   color: #7b6170;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .reward-action {
@@ -1153,8 +1440,8 @@ textarea {
 .calendar-controls button {
   display: grid;
   place-items: center;
-  width: 42px;
-  min-height: 42px;
+  width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 1px solid #d8bfca;
   background: #fff7fb;
@@ -1280,6 +1567,24 @@ textarea {
   color: #26684a;
 }
 
+.status-chip.cancelled,
+.status-chip.rejected {
+  background: #f2edf0;
+  color: #6f6068;
+}
+
+.request-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.compact-button {
+  min-height: 44px;
+  padding: 7px 10px;
+}
+
 .empty-record {
   display: flex;
   align-items: center;
@@ -1380,7 +1685,7 @@ textarea {
 }
 
 .report-switch button {
-  min-height: 36px;
+  min-height: 44px;
   margin: 0;
   padding: 5px 8px;
   background: transparent;
@@ -1507,8 +1812,8 @@ textarea {
 .top-icon-button {
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  min-height: 36px;
+  width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 1px solid #e5aec4;
   background: #fff;
@@ -1642,6 +1947,36 @@ textarea {
   margin-top: 12px;
 }
 
+.migration-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.migration-summary > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #efd0dc;
+  border-radius: 8px;
+  background: #fff7fb;
+}
+
+.migration-summary span {
+  color: #7b6170;
+  font-size: 14px;
+}
+
+.migration-summary strong {
+  color: #7a3657;
+  font-size: 19px;
+}
+
+.migration-actions {
+  display: grid;
+}
+
 .device-management {
   margin-top: 12px;
 }
@@ -1692,6 +2027,479 @@ textarea {
 .device-row > div {
   display: grid;
   gap: 2px;
+}
+
+.pet-page {
+  width: min(100%, 1280px);
+  margin: 0 auto;
+}
+
+.pet-page-heading,
+.pet-section-heading,
+.pet-status-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pet-page-heading {
+  align-items: center;
+  padding: 8px 0 18px;
+}
+
+.pet-page-heading h2 {
+  margin-bottom: 4px;
+}
+
+.pet-page-heading p:last-child {
+  margin-bottom: 0;
+}
+
+.pet-balance {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 7px;
+  min-width: 144px;
+  padding: 10px 14px;
+  border: 1px solid #e5b84e;
+  border-radius: 8px;
+  background: #fff8dc;
+  color: #785715;
+}
+
+.pet-balance strong {
+  grid-column: 1 / -1;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.pet-habitat {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1.1fr);
+  min-width: 0;
+  margin-bottom: 24px;
+  border-top: 2px solid #70af7c;
+  border-bottom: 2px solid #70af7c;
+  background: #fff;
+}
+
+.pet-stage {
+  min-width: 0;
+  padding: 18px;
+  background: #eff8f1;
+}
+
+.pet-speech {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: min(100%, 470px);
+  min-height: 68px;
+  margin: 0 auto 14px;
+  padding: 12px 14px;
+  border: 2px solid #4f9865;
+  border-radius: 8px;
+  background: #fff;
+  color: #255c38;
+  font-weight: 800;
+}
+
+.pet-speech::after {
+  position: absolute;
+  left: 52px;
+  bottom: -9px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid #4f9865;
+  border-bottom: 2px solid #4f9865;
+  background: #fff;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.pet-speech svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.pet-speech p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pet-stage figure {
+  width: min(100%, 470px);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #a9cab0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pet-photo {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: #edf7ef url("/pets/sun-conure-perch-bg-v2.webp") center / cover no-repeat;
+}
+
+.pet-character {
+  position: absolute;
+  z-index: 1;
+  top: 2.2%;
+  left: 9%;
+  display: block;
+  width: 78.5%;
+  height: auto;
+  filter: drop-shadow(12px 16px 12px rgba(35, 59, 42, 0.22));
+  transform-origin: 50% 82%;
+}
+
+.pet-perch-foreground {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pet-stage figcaption {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: 3px 9px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid #d8e8db;
+}
+
+.pet-stage figcaption strong {
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.pet-stage figcaption small,
+.pet-action small,
+.pet-inventory-item small {
+  color: #6c776f;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.pet-care-panel {
+  min-width: 0;
+  padding: 22px;
+}
+
+.pet-status-heading {
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #d9e5dc;
+}
+
+.pet-status-heading h3,
+.pet-status-heading p {
+  margin-bottom: 0;
+}
+
+.pet-status-heading img {
+  width: 64px;
+  height: 64px;
+  border: 3px solid #f1ad65;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.pet-status-list {
+  display: grid;
+  gap: 15px;
+  padding: 20px 0;
+}
+
+.pet-status > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.pet-status > div:first-child span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.pet-status-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #e9ecea;
+}
+
+.pet-status-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 360ms ease;
+}
+
+.pet-status-track.satiety span {
+  background: #e5a42f;
+}
+
+.pet-status-track.happiness span {
+  background: #e76f62;
+}
+
+.pet-status-track.cleanliness span {
+  background: #4f9ec4;
+}
+
+.pet-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pet-action {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  min-height: 78px;
+  padding: 10px 11px;
+  border: 1px solid #bdd5c2;
+  background: #f2faf4;
+  color: #26593a;
+  text-align: left;
+}
+
+.pet-action-feed {
+  border-color: #e1c167;
+  background: #fff9e7;
+  color: #6f5316;
+}
+
+.pet-action-play {
+  border-color: #e5a09a;
+  background: #fff2f0;
+  color: #7c3934;
+}
+
+.pet-action-bathe {
+  border-color: #8ec4dc;
+  background: #eef9fd;
+  color: #285d76;
+}
+
+.pet-action > span,
+.pet-inventory-item > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pet-action strong,
+.pet-action small {
+  overflow-wrap: anywhere;
+}
+
+.pet-inventory-section,
+.pet-store-section {
+  padding: 4px 0 22px;
+}
+
+.pet-inventory-section {
+  margin-bottom: 22px;
+  border-bottom: 1px solid #dfc8d1;
+}
+
+.pet-section-heading {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.pet-section-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 0;
+}
+
+.pet-section-heading > span {
+  flex: 0 0 auto;
+  color: #6f5e66;
+  font-weight: 800;
+}
+
+.pet-inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pet-inventory-item {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #d9cccf;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pet-item-icon,
+.pet-product-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.pet-item-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.pet-item-food {
+  background: #fff2c8;
+  color: #8a5c12;
+}
+
+.pet-item-toy {
+  background: #ffe3de;
+  color: #9b453c;
+}
+
+.pet-item-care {
+  background: #dff2fa;
+  color: #286a86;
+}
+
+.pet-store-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pet-product {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-content: start;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #ddc8cf;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(92, 74, 80, 0.09);
+}
+
+.pet-product-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.pet-product-copy {
+  min-width: 0;
+}
+
+.pet-product-copy > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.pet-product-copy h3 {
+  margin-bottom: 4px;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+
+.pet-product-copy strong {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  color: #a66b0b;
+}
+
+.pet-product-copy p {
+  margin-bottom: 0;
+  color: #72636a;
+  font-size: 14px;
+}
+
+.pet-buy-button {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 46px;
+}
+
+.pet-motion-idle {
+  animation: pet-idle 3.4s ease-in-out infinite;
+}
+
+.pet-motion-purchase {
+  animation: pet-bounce 620ms ease both;
+}
+
+.pet-motion-feed {
+  animation: pet-nod 620ms ease both;
+}
+
+.pet-motion-play {
+  animation: pet-hop 720ms ease both;
+}
+
+.pet-motion-bathe {
+  animation: pet-shake 680ms ease both;
+}
+
+@keyframes pet-idle {
+  0%, 100% { transform: rotate(-0.8deg) scale(1.01); }
+  50% { transform: rotate(0.8deg) scale(1.02); }
+}
+
+@keyframes pet-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-12px) scale(1.025); }
+}
+
+@keyframes pet-nod {
+  0%, 100% { transform: rotate(0); }
+  35% { transform: rotate(2.2deg) translateY(5px); }
+  70% { transform: rotate(-1.2deg) translateY(1px); }
+}
+
+@keyframes pet-hop {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-15px) rotate(-1.5deg); }
+  62% { transform: translateY(-5px) rotate(1.8deg); }
+}
+
+@keyframes pet-shake {
+  0%, 100% { transform: rotate(0) scale(1); }
+  20% { transform: rotate(-2.2deg) scale(1.015); }
+  40% { transform: rotate(2.2deg) scale(1.015); }
+  60% { transform: rotate(-1.4deg) scale(1.01); }
+  80% { transform: rotate(1.4deg) scale(1.01); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-character {
+    animation: none;
+  }
 }
 
 @media (min-width: 761px) and (max-width: 1100px) {
@@ -1784,6 +2592,15 @@ textarea {
   .shop-closed {
     grid-column: 1 / -1;
   }
+
+  .pet-habitat {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-inventory-grid,
+  .pet-store-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1836,8 +2653,8 @@ textarea {
   }
 
   .task-back-button {
-    width: 42px;
-    min-height: 42px;
+    width: 44px;
+    min-height: 44px;
     padding: 0;
   }
 
@@ -1878,6 +2695,10 @@ textarea {
   .device-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .migration-summary {
+    grid-template-columns: 1fr;
   }
 
   h1 {
@@ -2005,9 +2826,51 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .english-chant {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .english-chant button {
+    width: 100%;
+  }
+
   .game-scene {
     min-height: 160px;
     padding: 12px;
+  }
+
+  .game-interaction {
+    min-height: 220px;
+    padding: 12px;
+  }
+
+  .game-baskets,
+  .number-candidates,
+  .order-cards {
+    gap: 6px;
+  }
+
+  .game-baskets button {
+    min-height: 68px;
+  }
+
+  .number-route {
+    gap: 4px;
+  }
+
+  .number-route span {
+    min-height: 48px;
+    font-size: 18px;
+  }
+
+  .logic-clue {
+    align-items: flex-start;
+  }
+
+  .logic-clue img {
+    width: 54px;
+    height: 54px;
   }
 
   .game-options {
@@ -2022,6 +2885,10 @@ textarea {
   .request-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .request-actions {
+    justify-content: space-between;
   }
 
   .arithmetic-grid {
@@ -2041,13 +2908,58 @@ textarea {
   }
 
   .arithmetic-grid label {
-    grid-template-columns: minmax(0, 1fr) 58px 36px;
+    grid-template-columns: minmax(0, 1fr) 58px;
+  }
+
+  .dictation-review-row {
+    grid-template-columns: 1fr;
   }
 
   .toast {
     left: 88px;
     right: 10px;
     top: 96px;
+  }
+
+  .pet-page-heading,
+  .pet-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pet-balance {
+    grid-template-columns: auto 1fr auto;
+    width: 100%;
+  }
+
+  .pet-balance strong {
+    grid-column: auto;
+    font-size: 23px;
+  }
+
+  .pet-habitat {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-stage,
+  .pet-care-panel {
+    padding: 12px;
+  }
+
+  .pet-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-inventory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pet-store-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-section-heading > span {
+    align-self: flex-start;
   }
 }
 
@@ -2125,5 +3037,14 @@ textarea {
   .toast {
     left: 76px;
     right: 8px;
+  }
+
+  .pet-speech {
+    min-height: 76px;
+    padding: 10px;
+  }
+
+  .pet-inventory-grid {
+    grid-template-columns: 1fr;
   }
 }

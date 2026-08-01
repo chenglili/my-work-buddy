@@ -5,21 +5,36 @@ import {
   initialWorkspaceState,
   normalizeWorkspaceState,
   readStoredState,
+  refreshDailyState,
   STORAGE_KEY,
   type CompletionResultInput,
+  type PetAction,
+  type PetItemId,
   type WorkspaceState,
 } from "../state/workspace";
 import { cloudBackendEnabled, supabase } from "./supabase";
 import { clearCloudUserData, enqueueTaskCommand, readCloudSnapshot, readTaskOutbox, removeTaskCommand, saveCloudSnapshot } from "./offlineStore";
-import type { CloudMode, CloudWorkspaceController, CloudWorkspacePayload, QueuedTaskCommand, SyncStatus } from "./types";
+import type { CloudMode, CloudWorkspaceController, CloudWorkspacePayload, LegacyImportPreview, QueuedTaskCommand, SyncStatus } from "./types";
 
 const LEGACY_BACKUP_KEY = "my-work-buddy-state-v2-cloud-backup";
 
 const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
 const commandId = () => crypto.randomUUID();
 
+const readLegacyWorkspace = () => readStoredState();
+
+export const summarizeLegacyWorkspace = (legacy: WorkspaceState): LegacyImportPreview => ({
+  points: legacy.points,
+  completedDays: legacy.completedDates.length,
+  taskResults: legacy.taskResults.length,
+  pendingReviews: legacy.pendingTaskReviews.length,
+  rewardRequests: legacy.rewardRequests.length,
+  latestDate: legacy.dateKey,
+});
+
 const cleanResult = (result: CompletionResultInput): CompletionResultInput => ({
   score: result.score,
+  firstScore: result.firstScore,
   durationSeconds: result.durationSeconds ?? 0,
   attempts: result.attempts ?? 1,
   wrongQuestions: result.wrongQuestions ?? [],
@@ -56,18 +71,23 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   const [error, setError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [legacyPreview, setLegacyPreview] = useState<LegacyImportPreview | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const payloadRef = useRef<CloudWorkspacePayload | null>(null);
+  const activeDateKeyRef = useRef(state.dateKey);
   const flushingRef = useRef(false);
   const realtimeRefreshTimer = useRef<number | null>(null);
 
   const refreshPendingTaskIds = useCallback(async (userId: string) => {
     const commands = await readTaskOutbox(userId);
-    setPendingTaskIds(Array.from(new Set(commands.map((command) => command.taskId))));
+    setPendingTaskIds(Array.from(new Set(commands.filter((command) => command.dateKey === activeDateKeyRef.current).map((command) => command.taskId))));
     return commands;
   }, []);
 
   const applyPayload = useCallback(async (userId: string, raw: unknown) => {
     const next = normalizePayload(raw);
+    activeDateKeyRef.current = next.state.dateKey;
+    payloadRef.current = next;
     setPayload(next);
     setState(next.state);
     setMode("ready");
@@ -91,7 +111,9 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   const resetChildPairing = useCallback(async (userId: string, wasPaired: boolean) => {
     await clearCloudUserData(userId).catch(() => undefined);
     setPendingTaskIds([]);
+    payloadRef.current = null;
     setPayload(null);
+    setLegacyPreview(null);
     setState(initialWorkspaceState());
     setMode("pairing");
     setSyncStatus("offline");
@@ -118,8 +140,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
 
   const migrateLegacy = useCallback(async (userId: string, currentPayload: CloudWorkspacePayload) => {
     if (!supabase || currentPayload.legacyImported) return currentPayload;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const legacyState = stored ? JSON.parse(stored) as WorkspaceState : readStoredState();
+    const legacyState = readLegacyWorkspace();
     const serialized = JSON.stringify(legacyState);
     localStorage.setItem(LEGACY_BACKUP_KEY, serialized);
     const { data, error: migrationError } = await supabase.rpc("import_legacy_workspace", {
@@ -129,6 +150,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     });
     if (migrationError) throw migrationError;
     const migrated = normalizePayload(data);
+    setLegacyPreview(null);
     await applyPayload(userId, migrated);
     return migrated;
   }, [applyPayload]);
@@ -140,11 +162,16 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     setMode("loading");
     setSyncStatus(navigator.onLine ? "syncing" : "offline");
     const cached = await readCloudSnapshot(session.user.id).catch(() => undefined);
-    const queued = await refreshPendingTaskIds(session.user.id).catch(() => []);
     if (cached) {
-      setPayload(cached);
-      setState(cached.state);
+      const freshState = refreshDailyState(cached.state);
+      const freshCached = freshState === cached.state ? cached : { ...cached, state: freshState };
+      activeDateKeyRef.current = freshCached.state.dateKey;
+      payloadRef.current = freshCached;
+      setPayload(freshCached);
+      setState(freshCached.state);
+      if (freshState !== cached.state) void saveCloudSnapshot(session.user.id, freshCached);
     }
+    const queued = await refreshPendingTaskIds(session.user.id).catch(() => []);
 
     try {
       if (!session.user.is_anonymous) {
@@ -159,10 +186,24 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
         }
         throw workspaceError;
       }
-      let next = normalizePayload(data);
+      const next = normalizePayload(data);
+      if (!session.user.is_anonymous && !next.legacyImported) {
+        const legacyState = readLegacyWorkspace();
+        activeDateKeyRef.current = legacyState.dateKey;
+        payloadRef.current = next;
+        setPayload(next);
+        setState(legacyState);
+        setLegacyPreview(summarizeLegacyWorkspace(legacyState));
+        setMode("migration");
+        setSyncStatus("synced");
+        setError("");
+        return;
+      }
       await applyPayload(session.user.id, next);
-      if (queued.length) setSyncStatus(navigator.onLine ? "syncing" : "pending");
-      if (!session.user.is_anonymous && !next.legacyImported) next = await migrateLegacy(session.user.id, next);
+      if (queued.length) {
+        await refreshPendingTaskIds(session.user.id);
+        setSyncStatus(navigator.onLine ? "syncing" : "pending");
+      }
       await invokeNotification();
     } catch (sessionError) {
       if (cached) {
@@ -174,7 +215,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
         setError(errorMessage(sessionError));
       }
     }
-  }, [applyPayload, invokeNotification, migrateLegacy, refreshPendingTaskIds, resetChildPairing]);
+  }, [applyPayload, invokeNotification, refreshPendingTaskIds, resetChildPairing]);
 
   const syncQueuedCommand = useCallback(async (command: QueuedTaskCommand) => {
     if (!supabase) return;
@@ -183,6 +224,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       p_date_key: command.dateKey,
       p_task_id: command.taskId,
       p_result: command.result,
+      p_completed_at: command.createdAt,
     });
     if (rpcError) throw rpcError;
     await removeTaskCommand(command.commandId);
@@ -244,8 +286,16 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) void initializeSession(session);
       else {
         if (session) return;
+        const emptyState = initialWorkspaceState();
+        payloadRef.current = null;
+        activeDateKeyRef.current = emptyState.dateKey;
         setPayload(null);
+        setLegacyPreview(null);
         setPendingTaskIds([]);
+        setState(emptyState);
+        setUserEmail("");
+        setAuthMessage("");
+        setError("");
         setMode("signed-out");
         setSyncStatus("offline");
       }
@@ -269,6 +319,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       .on("postgres_changes", { event: "*", schema: "public", table: "task_records" }, refreshSoon)
       .on("postgres_changes", { event: "*", schema: "public", table: "point_ledger" }, refreshSoon)
       .on("postgres_changes", { event: "*", schema: "public", table: "reward_requests" }, refreshSoon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "pet_profiles" }, refreshSoon)
       .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, refreshSoon)
       .subscribe();
     const online = () => void flushOutbox();
@@ -312,16 +363,53 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   const signOut = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+    const emptyState = initialWorkspaceState();
     sessionRef.current = null;
     setPayload(null);
+    payloadRef.current = null;
+    activeDateKeyRef.current = emptyState.dateKey;
+    setLegacyPreview(null);
     setPendingTaskIds([]);
     setMode("signed-out");
-    setState(initialWorkspaceState());
+    setState(emptyState);
+    setUserEmail("");
+    setAuthMessage("");
+    setError("");
   }, []);
 
   const refresh = useCallback(async () => {
     await refreshFromCloud();
   }, [refreshFromCloud]);
+
+  const refreshLocalDate = useCallback(() => {
+    const next = refreshDailyState(state);
+    if (next === state) return;
+    activeDateKeyRef.current = next.dateKey;
+    setState(next);
+    const session = sessionRef.current;
+    const currentPayload = payloadRef.current;
+    if (session && currentPayload) {
+      const nextPayload = { ...currentPayload, state: next };
+      payloadRef.current = nextPayload;
+      setPayload(nextPayload);
+      void saveCloudSnapshot(session.user.id, nextPayload);
+      void refreshPendingTaskIds(session.user.id);
+    }
+  }, [refreshPendingTaskIds, state]);
+
+  const confirmLegacyImport = useCallback(async () => {
+    const session = sessionRef.current;
+    const currentPayload = payloadRef.current;
+    if (!session || session.user.is_anonymous || !currentPayload || currentPayload.legacyImported) throw new Error("当前没有待迁移的家长设备。");
+    setMode("loading");
+    try {
+      await migrateLegacy(session.user.id, currentPayload);
+    } catch (migrationError) {
+      setMode("migration");
+      setError(`迁移未完成：${errorMessage(migrationError)}`);
+      throw migrationError;
+    }
+  }, [migrateLegacy]);
 
   const submitTask = useCallback(async (task: TaskDefinition, result: CompletionResultInput) => {
     if (!cloudBackendEnabled || !supabase) throw new Error("云端未启用。");
@@ -363,8 +451,8 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
 
   const runMutation = useCallback(async (name: string, args: Record<string, unknown>) => {
     const session = sessionRef.current;
-    if (!supabase || !session) throw new Error("请先登录家长账号。");
-    if (!navigator.onLine) throw new Error("家长操作需要联网后进行。");
+    if (!supabase || !session) throw new Error("请先登录或配对设备。");
+    if (!navigator.onLine) throw new Error("此操作需要联网后进行。");
     setSyncStatus("syncing");
     const { data, error: rpcError } = await supabase.rpc(name, { p_command_id: commandId(), ...args });
     if (rpcError) {
@@ -400,18 +488,25 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     error,
     authMessage,
     userEmail,
+    legacyPreview,
     setLocalState: setState,
     loginParent,
     pairChild,
     signOut,
     refresh,
+    refreshLocalDate,
+    confirmLegacyImport,
     submitTask,
     reviewTask: (reviewId, action) => runMutation("review_task", { p_review_id: reviewId, p_action: action }),
     reviewAll: () => runMutation("review_all", {}),
     requestReward: (rewardId) => runMutation("request_reward", { p_reward_id: rewardId }),
+    cancelReward: (requestId) => runMutation("cancel_reward", { p_request_id: requestId }),
     approveReward: (requestId) => runMutation("approve_reward", { p_request_id: requestId }),
+    rejectReward: (requestId) => runMutation("reject_reward", { p_request_id: requestId }),
     fulfillReward: (requestId) => runMutation("fulfill_reward", { p_request_id: requestId }),
     adjustPoints: (amount) => runMutation("adjust_points", { p_amount: amount }),
+    purchasePetItem: (itemId: PetItemId) => runMutation("purchase_pet_item", { p_item_id: itemId }),
+    interactPet: (action: PetAction, itemId: PetItemId) => runMutation("interact_pet", { p_action: action, p_item_id: itemId }),
     createPairCode,
     revokeDevice,
   };

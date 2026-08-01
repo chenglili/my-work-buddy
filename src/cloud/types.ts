@@ -1,8 +1,8 @@
 import type { TaskDefinition } from "../appData";
-import type { CompletionResultInput, WorkspaceState } from "../state/workspace";
+import type { CompletionResultInput, PetAction, PetItemId, WorkspaceState } from "../state/workspace";
 
 export type CloudRole = "parent" | "child_device";
-export type CloudMode = "local" | "loading" | "signed-out" | "pairing" | "ready" | "error";
+export type CloudMode = "local" | "loading" | "signed-out" | "pairing" | "migration" | "ready" | "error";
 export type SyncStatus = "local" | "synced" | "syncing" | "pending" | "offline";
 
 export interface CloudDevice {
@@ -18,6 +18,15 @@ export interface CloudWorkspacePayload {
   childId: string;
   legacyImported: boolean;
   devices: CloudDevice[];
+}
+
+export interface LegacyImportPreview {
+  points: number;
+  completedDays: number;
+  taskResults: number;
+  pendingReviews: number;
+  rewardRequests: number;
+  latestDate: string;
 }
 
 export interface QueuedTaskCommand {
@@ -41,18 +50,25 @@ export interface CloudWorkspaceController {
   error: string;
   authMessage: string;
   userEmail: string;
+  legacyPreview: LegacyImportPreview | null;
   setLocalState: React.Dispatch<React.SetStateAction<WorkspaceState>>;
   loginParent(email: string): Promise<void>;
   pairChild(code: string, deviceName: string): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
+  refreshLocalDate(): void;
+  confirmLegacyImport(): Promise<void>;
   submitTask(task: TaskDefinition, result: CompletionResultInput): Promise<"synced" | "queued">;
   reviewTask(reviewId: string, action: "approve" | "reject"): Promise<void>;
   reviewAll(): Promise<void>;
   requestReward(rewardId: string): Promise<void>;
+  cancelReward(requestId: string): Promise<void>;
   approveReward(requestId: string): Promise<void>;
+  rejectReward(requestId: string): Promise<void>;
   fulfillReward(requestId: string): Promise<void>;
   adjustPoints(amount: number): Promise<void>;
+  purchasePetItem(itemId: PetItemId): Promise<void>;
+  interactPet(action: PetAction, itemId: PetItemId): Promise<void>;
   createPairCode(): Promise<{ code: string; expiresAt: string }>;
   revokeDevice(userId: string): Promise<void>;
 }

@@ -2,9 +2,26 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { initialWorkspaceState } from "../state/workspace";
 import { clearCloudUserData, enqueueTaskCommand, readCloudSnapshot, readTaskOutbox, removeTaskCommand, saveCloudSnapshot } from "./offlineStore";
+import { summarizeLegacyWorkspace } from "./useCloudWorkspace";
 import type { CloudWorkspacePayload, QueuedTaskCommand } from "./types";
 
 describe("cloud offline store", () => {
+  it("summarizes the local device before a parent confirms the one-time migration", () => {
+    const state = {
+      ...initialWorkspaceState(new Date("2026-08-01T04:00:00.000Z")),
+      points: 86,
+      completedDates: ["2026-07-31", "2026-08-01"],
+      rewardRequests: [{ id: "reward-1", rewardId: "reward-snack", rewardName: "零食", cost: 80, status: "fulfilled" as const, requestedAt: "2026-08-01T01:00:00.000Z" }],
+    };
+
+    expect(summarizeLegacyWorkspace(state)).toMatchObject({
+      points: 86,
+      completedDays: 2,
+      rewardRequests: 1,
+      latestDate: "2026-08-01",
+    });
+  });
+
   it("stores a canonical workspace snapshot per signed-in user", async () => {
     const userId = crypto.randomUUID();
     const payload: CloudWorkspacePayload = {

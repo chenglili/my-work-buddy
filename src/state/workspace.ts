@@ -1,10 +1,42 @@
 export const STORAGE_KEY = 'my-work-buddy-state-v2';
 export const LEGACY_STORAGE_KEY = 'my-work-buddy-state-v1';
 
+export type PetItemId = 'parrot-food' | 'apple-bites' | 'bell-toy' | 'bath-spray';
+export type PetAction = 'feed' | 'play' | 'bathe';
+export type PetLastAction = PetAction | 'purchase' | 'idle';
+
+export interface PetItemDefinition {
+  id: PetItemId;
+  name: string;
+  price: number;
+  kind: 'food' | 'toy' | 'care';
+  description: string;
+}
+
+export interface PetState {
+  name: string;
+  satiety: number;
+  happiness: number;
+  cleanliness: number;
+  inventory: Partial<Record<PetItemId, number>>;
+  ownedToys: PetItemId[];
+  lastAction: PetLastAction;
+  lastMessage: string;
+  lastRefreshedDate: string;
+}
+
+export const petItemDefinitions: PetItemDefinition[] = [
+  { id: 'parrot-food', name: '鹦鹉粮', price: 5, kind: 'food', description: '一项基础任务即可兑换，补充当日饱腹度。' },
+  { id: 'apple-bites', name: '苹果粒', price: 8, kind: 'food', description: '额外补充饱腹度和开心度。' },
+  { id: 'bell-toy', name: '叮当铃玩具', price: 40, kind: 'toy', description: '接近完成整套今日任务后永久解锁。' },
+  { id: 'bath-spray', name: '羽毛沐浴喷雾', price: 8, kind: 'care', description: '约每两天使用一次，恢复清洁度。' },
+];
+
 export interface TaskResult {
   taskId: string;
   dateKey: string;
   score?: number;
+  firstScore?: number;
   durationSeconds: number;
   attempts: number;
   wrongQuestions: string[];
@@ -22,7 +54,7 @@ export interface PendingTaskReview {
   submittedAt: string;
 }
 
-export type RewardRequestStatus = 'pending' | 'approved' | 'fulfilled';
+export type RewardRequestStatus = 'pending' | 'approved' | 'fulfilled' | 'cancelled' | 'rejected';
 
 export interface RewardRequest {
   id: string;
@@ -33,11 +65,14 @@ export interface RewardRequest {
   requestedAt: string;
   approvedAt?: string;
   fulfilledAt?: string;
+  cancelledAt?: string;
+  rejectedAt?: string;
 }
 
 export interface WorkspaceState {
   dateKey: string;
   points: number;
+  pet: PetState;
   completedTaskIds: string[];
   bonusAwarded: boolean;
   completedDates: string[];
@@ -60,6 +95,7 @@ interface LegacyWorkspaceState {
 
 export interface CompletionResultInput {
   score?: number;
+  firstScore?: number;
   durationSeconds?: number;
   attempts?: number;
   wrongQuestions?: string[];
@@ -80,9 +116,41 @@ export const weekKey = (date = new Date()) => {
   return dateKey(monday);
 };
 
+const clampPetStat = (value: number) => Math.max(0, Math.min(100, value));
+
+export const initialPetState = (today = new Date()): PetState => ({
+  name: '嘟嘟',
+  satiety: 72,
+  happiness: 78,
+  cleanliness: 82,
+  inventory: {},
+  ownedToys: [],
+  lastAction: 'idle',
+  lastMessage: '啾！今天的值班铲屎官到岗了吗？',
+  lastRefreshedDate: dateKey(today),
+});
+
+const refreshPetProfile = (pet: PetState, today = new Date()): PetState => {
+  const todayKey = dateKey(today);
+  if (pet.lastRefreshedDate === todayKey) return pet;
+
+  const satiety = clampPetStat(pet.satiety - 10);
+  const happiness = clampPetStat(pet.happiness - 7);
+  const cleanliness = clampPetStat(pet.cleanliness - 6);
+  const lowest = Math.min(satiety, happiness, cleanliness);
+  const lastMessage = lowest === satiety
+    ? '我肚子里的小鼓已经停止演奏了，懂我意思吧？'
+    : lowest === cleanliness
+      ? '羽毛有点不听话，本鸟申请一个豪华水疗。'
+      : '叮当铃不响的时候，我连搞怪都没力气。';
+
+  return { ...pet, satiety, happiness, cleanliness, lastAction: 'idle', lastMessage, lastRefreshedDate: todayKey };
+};
+
 export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   dateKey: dateKey(today),
   points: 0,
+  pet: initialPetState(today),
   completedTaskIds: [],
   bonusAwarded: false,
   completedDates: [],
@@ -94,16 +162,94 @@ export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   notifiedDailyReadyDates: [],
 });
 
+export const refreshPetState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
+  const pet = refreshPetProfile(state.pet, today);
+  return pet === state.pet ? state : { ...state, pet };
+};
+
 export const refreshDailyState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
+  const freshState = refreshPetState(state, today);
   const todayKey = dateKey(today);
-  if (state.dateKey === todayKey) return state;
+  if (freshState.dateKey === todayKey) return freshState;
 
   return {
-    ...state,
+    ...freshState,
     dateKey: todayKey,
     completedTaskIds: [],
     bonusAwarded: false,
     pendingTaskReviews: [],
+  };
+};
+
+export const purchasePetItem = (state: WorkspaceState, itemId: PetItemId, now = new Date()): WorkspaceState | null => {
+  const freshState = refreshPetState(state, now);
+  const item = petItemDefinitions.find((candidate) => candidate.id === itemId);
+  if (!item || freshState.points < item.price) return null;
+  if (item.kind === 'toy' && freshState.pet.ownedToys.includes(item.id)) return null;
+
+  const pet = item.kind === 'toy'
+    ? { ...freshState.pet, ownedToys: [...freshState.pet.ownedToys, item.id] }
+    : { ...freshState.pet, inventory: { ...freshState.pet.inventory, [item.id]: (freshState.pet.inventory[item.id] ?? 0) + 1 } };
+
+  return {
+    ...freshState,
+    points: freshState.points - item.price,
+    pet: {
+      ...pet,
+      lastAction: 'purchase',
+      lastMessage: item.kind === 'toy'
+        ? '叮当铃已签收！本鸟宣布客厅从此归我巡演。'
+        : `${item.name}已入库，看来你很懂本鸟的排面。`,
+    },
+  };
+};
+
+export const interactWithPet = (state: WorkspaceState, action: PetAction, itemId: PetItemId, now = new Date()): WorkspaceState | null => {
+  const freshState = refreshPetState(state, now);
+  const item = petItemDefinitions.find((candidate) => candidate.id === itemId);
+  if (!item) return null;
+
+  if (action === 'play') {
+    if (item.kind !== 'toy' || !freshState.pet.ownedToys.includes(itemId)) return null;
+    return {
+      ...freshState,
+      pet: {
+        ...freshState.pet,
+        happiness: clampPetStat(freshState.pet.happiness + 15),
+        lastAction: action,
+        lastMessage: '叮铃铃！看我表演一个原地起飞……算了，先鼓掌。',
+      },
+    };
+  }
+
+  const count = freshState.pet.inventory[itemId] ?? 0;
+  if (count < 1 || (action === 'feed' && item.kind !== 'food') || (action === 'bathe' && item.kind !== 'care')) return null;
+  const inventory = { ...freshState.pet.inventory, [itemId]: count - 1 };
+
+  if (action === 'feed') {
+    const isApple = itemId === 'apple-bites';
+    return {
+      ...freshState,
+      pet: {
+        ...freshState.pet,
+        satiety: clampPetStat(freshState.pet.satiety + (isApple ? 10 : 14)),
+        happiness: clampPetStat(freshState.pet.happiness + (isApple ? 10 : 0)),
+        inventory,
+        lastAction: action,
+        lastMessage: isApple ? '苹果粒到嘴，本鸟宣布今天是好日子！' : '咔嚓咔嚓！这口粮，勉强给你五星好评。',
+      },
+    };
+  }
+
+  return {
+    ...freshState,
+    pet: {
+      ...freshState.pet,
+      cleanliness: clampPetStat(freshState.pet.cleanliness + 12),
+      inventory,
+      lastAction: action,
+      lastMessage: '洗完啦！现在每根羽毛都在偷偷发光。',
+    },
   };
 };
 
@@ -128,6 +274,7 @@ export const completeTask = (
     taskId,
     dateKey: todayKey,
     score: result.score,
+    firstScore: result.firstScore,
     durationSeconds: result.durationSeconds ?? 0,
     attempts: result.attempts ?? 1,
     wrongQuestions: result.wrongQuestions ?? [],
@@ -243,7 +390,7 @@ export const requestReward = (
   now = new Date(),
 ): WorkspaceState | null => {
   if (!isWeekend(now) || state.points < reward.cost) return null;
-  if (state.rewardRequests.some((item) => item.rewardId === reward.id && item.status !== 'fulfilled')) return null;
+  if (state.rewardRequests.some((item) => item.rewardId === reward.id && (item.status === 'pending' || item.status === 'approved'))) return null;
 
   return {
     ...state,
@@ -258,6 +405,16 @@ export const requestReward = (
       },
       ...state.rewardRequests,
     ],
+  };
+};
+
+export const cancelReward = (state: WorkspaceState, requestId: string, now = new Date()): WorkspaceState | null => {
+  if (!state.rewardRequests.some((item) => item.id === requestId && item.status === 'pending')) return null;
+  return {
+    ...state,
+    rewardRequests: state.rewardRequests.map((item) => item.id === requestId
+      ? { ...item, status: 'cancelled', cancelledAt: now.toISOString() }
+      : item),
   };
 };
 
@@ -291,6 +448,18 @@ export const fulfillReward = (state: WorkspaceState, requestId: string, pin: str
   };
 };
 
+export const rejectReward = (state: WorkspaceState, requestId: string, pin: string, now = new Date()): WorkspaceState | null => {
+  if (!verifyParentPin(state, pin, now)) return null;
+  if (!state.rewardRequests.some((item) => item.id === requestId && item.status === 'pending')) return null;
+
+  return {
+    ...state,
+    rewardRequests: state.rewardRequests.map((item) => item.id === requestId
+      ? { ...item, status: 'rejected', rejectedAt: now.toISOString() }
+      : item),
+  };
+};
+
 export const adjustPoints = (state: WorkspaceState, amount: number, pin: string, now = new Date()): WorkspaceState | null => {
   if (!verifyParentPin(state, pin, now) || !Number.isInteger(amount) || amount === 0) return null;
   return { ...state, points: Math.max(0, state.points + amount) };
@@ -318,10 +487,10 @@ export const calculateStreak = (completedDates: string[], today = new Date()) =>
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
 
 const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoints: number, rewardRequests: RewardRequest[]) => {
-  const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && result.score !== undefined);
+  const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && (result.firstScore ?? result.score) !== undefined);
   const totalDurationSeconds = results.reduce((sum, result) => sum + result.durationSeconds, 0);
   const arithmeticAverage = arithmeticResults.length
-    ? Math.round(arithmeticResults.reduce((sum, result) => sum + (result.score ?? 0), 0) / arithmeticResults.length)
+    ? Math.round(arithmeticResults.reduce((sum, result) => sum + (result.firstScore ?? result.score ?? 0), 0) / arithmeticResults.length)
     : 0;
   const wrongQuestions = results.flatMap((result) => result.wrongQuestions);
 
@@ -388,11 +557,23 @@ export const migrateLegacyState = (legacy: LegacyWorkspaceState, today = new Dat
   }, today);
 };
 
+const normalizePetState = (parsed: Partial<PetState> | undefined, today: Date): PetState => {
+  const initial = initialPetState(today);
+  return refreshPetProfile({
+    ...initial,
+    ...parsed,
+    name: parsed?.name === '啾啾' ? '嘟嘟' : parsed?.name ?? initial.name,
+    inventory: { ...initial.inventory, ...parsed?.inventory },
+    ownedToys: parsed?.ownedToys ?? initial.ownedToys,
+  }, today);
+};
+
 export const normalizeWorkspaceState = (parsed: Partial<WorkspaceState>, today: Date): WorkspaceState => {
   const initial = initialWorkspaceState(today);
   return refreshDailyState({
     dateKey: parsed.dateKey ?? initial.dateKey,
     points: parsed.points ?? 0,
+    pet: normalizePetState(parsed.pet, today),
     completedTaskIds: parsed.completedTaskIds ?? [],
     bonusAwarded: parsed.bonusAwarded ?? false,
     completedDates: parsed.completedDates ?? [],
