@@ -56,6 +56,7 @@ import {
   cancelReward,
   calculateStreak,
   completeTask,
+  dailyParentPin,
   fulfillReward,
   getDailyReport,
   getMonthlyReport,
@@ -343,6 +344,7 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
   const [parentDeviceName, setParentDeviceName] = useState("家长电脑");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(workspace.mode === "pairing");
 
   useEffect(() => {
     if (workspace.mode === "pairing") setAccessType("child");
@@ -369,6 +371,18 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
       await workspace.pairParent(parentCode, parentDeviceName.trim());
     } catch (pairError) {
       setMessage(pairError instanceof Error ? pairError.message : "家长配对码无效或已过期。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitAutoLogin = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await workspace.refresh();
+    } catch (refreshError) {
+      setMessage(refreshError instanceof Error ? refreshError.message : "未找到已保存的家长登录，请完成首次验证。");
     } finally {
       setBusy(false);
     }
@@ -428,6 +442,22 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
     );
   }
 
+  if (!showFirstTimeSetup && workspace.mode !== "pairing") {
+    return (
+      <main className="cloud-access-screen">
+        <section className="cloud-access-panel">
+          <div className="cloud-access-brand"><img src={characterImages["hello-kitty"]} alt="" /><div><p className="eyebrow">Cloud sync</p><h1>甜心工作台</h1></div></div>
+          <div className="cloud-access-form">
+            <p className="cloud-access-hint">家长设备已安全登录。下次打开时点击一键恢复，数据会自动同步。</p>
+            <button className="primary big" disabled={busy} onClick={() => void submitAutoLogin()}>{busy ? <RefreshCw className="spin" size={20} /> : <LockKeyhole size={20} />}一键恢复家长登录</button>
+            <button className="secondary" disabled={busy} onClick={() => setShowFirstTimeSetup(true)}><RefreshCw size={17} />首次设置家长设备</button>
+          </div>
+          {workspace.authMessage || message || workspace.error ? <p className="cloud-access-message">{workspace.authMessage || message || workspace.error}</p> : null}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="cloud-access-screen">
       <section className="cloud-access-panel">
@@ -460,6 +490,7 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
         )}
 
         {workspace.authMessage || message || workspace.error ? <p className="cloud-access-message">{workspace.authMessage || message || workspace.error}</p> : null}
+        {workspace.mode !== "pairing" ? <div className="cloud-access-actions"><button className="secondary" disabled={busy} onClick={() => setShowFirstTimeSetup(false)}><ArrowLeft size={17} />返回一键登录</button></div> : null}
         {workspace.mode === "signed-out" && workspace.authMessage ? <div className="cloud-access-actions"><button className="secondary" onClick={() => void workspace.refresh()}><RefreshCw size={17} />我已打开邮件，检查登录状态</button></div> : null}
         {workspace.mode === "error" || workspace.mode === "pairing" ? <div className="cloud-access-actions"><button className="secondary" onClick={() => void workspace.refresh()}><RefreshCw size={17} />重新连接</button><button className="secondary" onClick={() => void workspace.signOut()}><LogOut size={17} />清除当前会话</button></div> : null}
       </section>
@@ -1551,9 +1582,9 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
   const [generatedPairCode, setGeneratedPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const [generatedParentPairCode, setGeneratedParentPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const cloudParent = cloud.enabled && cloud.role === "parent";
-  const parentUnlocked = cloud.enabled ? cloudParent : parentSession?.dateKey === state.dateKey;
-  const parentPin = parentSession?.pin ?? pin;
   const reportDate = dateFromKey(state.dateKey);
+  const parentUnlocked = cloud.enabled ? cloudParent : true;
+  const parentPin = dailyParentPin(reportDate);
   const reports = {
     day: getDailyReport(state, reportDate),
     week: getWeeklyReport(state, reportDate),
