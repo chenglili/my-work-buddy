@@ -89,6 +89,46 @@ import type { CloudWorkspaceController } from "./cloud/types";
 
 type Route = { view: ViewKey; taskId?: string };
 
+type PetSoundAction = Extract<PetLastAction, "feed" | "play" | "bathe" | "purchase">;
+
+let petAudioContext: AudioContext | null = null;
+
+function preparePetSound() {
+  if (typeof window === "undefined" || !window.AudioContext) return;
+  if (!petAudioContext) petAudioContext = new window.AudioContext();
+  if (petAudioContext.state === "suspended") void petAudioContext.resume();
+}
+
+function playPetSound(action: PetSoundAction) {
+  preparePetSound();
+  const context = petAudioContext;
+  if (!context) return;
+
+  const patterns: Record<PetSoundAction, Array<[number, number, number]>> = {
+    feed: [[880, 0, 0.12], [1175, 0.1, 0.16]],
+    play: [[659, 0, 0.14], [988, 0.1, 0.14], [1318, 0.2, 0.22]],
+    bathe: [[1175, 0, 0.1], [1568, 0.13, 0.14], [1047, 0.27, 0.2]],
+    purchase: [[784, 0, 0.12], [1175, 0.1, 0.18]],
+  };
+  const type: OscillatorType = action === "play" ? "triangle" : "sine";
+  const volume = action === "bathe" ? 0.08 : 0.12;
+  const start = context.currentTime;
+
+  patterns[action].forEach(([frequency, offset, duration]) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start + offset);
+    gain.gain.setValueAtTime(0.0001, start + offset);
+    gain.gain.exponentialRampToValueAtTime(volume, start + offset + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + duration);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(start + offset);
+    oscillator.stop(start + offset + duration + 0.02);
+  });
+}
+
 export interface ArithmeticQuestion {
   prompt: string;
   answer: number;
@@ -1367,6 +1407,7 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
 
   const buyItem = async (itemId: PetItemId) => {
     const item = petItemDefinitions.find((candidate) => candidate.id === itemId)!;
+    preparePetSound();
     setBusy(`buy-${itemId}`);
     try {
       if (cloud.enabled) await cloud.purchasePetItem(itemId);
@@ -1376,6 +1417,7 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
         setState(next);
       }
       const line = choosePetLine(petPurchaseLines);
+      playPetSound("purchase");
       animate("purchase");
       showDialogue(line);
       speak(line);
@@ -1392,6 +1434,7 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
 
   const interact = async (hotspot: PetSceneHotspotDefinition) => {
     const line = choosePetLine(petSceneLines[hotspot.id]);
+    preparePetSound();
     setBusy(`${hotspot.action}-${hotspot.itemId}`);
     try {
       if (cloud.enabled) await cloud.interactPet(hotspot.action, hotspot.itemId);
@@ -1400,6 +1443,7 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
         if (!next) throw new Error("pet item unavailable");
         setState(next);
       }
+      playPetSound(hotspot.action);
       animate(hotspot.action);
       showDialogue(line);
       speak(line);
