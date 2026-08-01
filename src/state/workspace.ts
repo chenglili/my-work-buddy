@@ -40,6 +40,7 @@ export interface TaskResult {
   durationSeconds: number;
   attempts: number;
   wrongQuestions: string[];
+  answers?: Record<string, string>;
   evidence?: string;
   completedAt: string;
 }
@@ -99,6 +100,7 @@ export interface CompletionResultInput {
   durationSeconds?: number;
   attempts?: number;
   wrongQuestions?: string[];
+  answers?: Record<string, string>;
   evidence?: string;
 }
 
@@ -278,6 +280,7 @@ export const completeTask = (
     durationSeconds: result.durationSeconds ?? 0,
     attempts: result.attempts ?? 1,
     wrongQuestions: result.wrongQuestions ?? [],
+    answers: result.answers,
     evidence: result.evidence,
     completedAt: today.toISOString(),
   };

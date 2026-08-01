@@ -38,6 +38,7 @@ const cleanResult = (result: CompletionResultInput): CompletionResultInput => ({
   durationSeconds: result.durationSeconds ?? 0,
   attempts: result.attempts ?? 1,
   wrongQuestions: result.wrongQuestions ?? [],
+  answers: result.answers,
   evidence: result.evidence,
 });
 

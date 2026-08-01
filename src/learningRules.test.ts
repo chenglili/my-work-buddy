@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readingComprehensions } from "./data";
-import { arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
+import { areAllArithmeticAnswersFilled, arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
 
 describe("reading short-answer rules", () => {
   it("accepts equivalent wording and ignores punctuation and spaces", () => {
@@ -39,5 +39,11 @@ describe("arithmetic retry rules", () => {
     const retriedAnswers = { ...firstAnswers, 1: "34", 3: "64" };
     expect(findWrongArithmeticIndices(questions, retriedAnswers, initialWrong)).toEqual([]);
     expect(arithmeticScore(questions.length, 0)).toBe(100);
+  });
+
+  it("requires every displayed arithmetic answer before checking", () => {
+    expect(areAllArithmeticAnswersFilled(questions, { 0: "25", 1: "34" })).toBe(false);
+    expect(areAllArithmeticAnswersFilled(questions, { 0: "25", 1: "34" }, [1])).toBe(true);
+    expect(areAllArithmeticAnswersFilled(questions, { 0: "25", 1: "34", 2: "45", 3: "64", 4: "29" })).toBe(true);
   });
 });

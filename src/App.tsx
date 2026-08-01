@@ -46,7 +46,7 @@ import {
   wordProblems,
 } from "./appData";
 import { chineseReadings, readingComprehensions, shopRewards } from "./data";
-import { arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
+import { areAllArithmeticAnswersFilled, arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
 import type { ReadingQuestion } from "./types/learning";
 import {
   adjustPoints,
@@ -79,6 +79,7 @@ import {
   type PetAction,
   type PetItemId,
   type PetLastAction,
+  type TaskResult,
   type PetState,
   type WorkspaceState,
 } from "./state/workspace";
@@ -186,6 +187,7 @@ export default function App() {
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
   const streak = calculateStreak(state.completedDates);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
+  const existingTaskResult = currentTask ? state.taskResults.find((result) => result.taskId === currentTask.id && result.dateKey === state.dateKey) : undefined;
   const dailyReadyForNotification = isDailyReadyForNotification(state, requiredTaskIds);
   const dailyReadyNotificationSent = state.notifiedDailyReadyDates.includes(state.dateKey);
 
@@ -270,7 +272,7 @@ export default function App() {
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible={!workspace.enabled || requiredTaskIds.includes(currentTask.id) || optionalTaskIds.includes(currentTask.id)} dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
+          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible={!workspace.enabled || requiredTaskIds.includes(currentTask.id) || optionalTaskIds.includes(currentTask.id)} dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
         ) : route.view === "home" ? (
           <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
@@ -526,11 +528,11 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
   );
 }
 
-function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
+function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
   const directCompletion = task.completionMode === "auto" && task.minimumScore === 0;
-  const [outcome, setOutcome] = useState<TaskOutcome>(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成朗读" : undefined, message: directCompletion ? "读完后，可以直接完成任务。" : undefined } : emptyOutcome);
+  const [outcome, setOutcome] = useState<TaskOutcome>(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome);
   useEffect(() => {
-    setOutcome(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成朗读" : undefined, message: directCompletion ? "读完后，可以直接完成任务。" : undefined } : emptyOutcome);
+    setOutcome(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome);
   }, [task.id, completed, directCompletion]);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
@@ -545,7 +547,7 @@ function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, on
           <p>{encouragements[taskCatalog.indexOf(task) % encouragements.length]}</p>
         </div>
       </div>
-      <TaskContent task={task} dateKey={dateKey} onProgress={setOutcome} />
+      <TaskContent task={task} dateKey={dateKey} existingResult={existingResult} onProgress={setOutcome} />
       <div className="finish-bar">
         <p className={outcome.ready && eligible ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : syncPending ? "任务已保存在本机，联网后同步并结算正式积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : !eligible ? "今天可以自由练习，这项不计入今日积分。" : outcome.message ?? completionHint(task)}</p>
         <button className="primary big" disabled={!canComplete} onClick={() => onDone({
@@ -565,8 +567,7 @@ function completionHint(task: TaskDefinition) {
   return `正确率达到${task.minimumScore ?? 80}%后解锁积分。`;
 }
 
-function TaskContent({ task, dateKey, onProgress }: { task: TaskDefinition; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
-  const minimumDuration = task.minimumDuration ?? 0;
+function TaskContent({ task, dateKey, existingResult, onProgress }: { task: TaskDefinition; dateKey: string; existingResult?: TaskResult; onProgress: (outcome: TaskOutcome) => void }) {
   switch (task.id) {
     case "chinese-morning-reading": return <MorningReading dateKey={dateKey} />;
     case "chinese-preview-copybook": return <CopybookPreview dateKey={dateKey} onProgress={onProgress} />;
@@ -575,10 +576,10 @@ function TaskContent({ task, dateKey, onProgress }: { task: TaskDefinition; date
     case "chinese-night-reading": return <NightReading dateKey={dateKey} />;
     case "chinese-picture-writing": return <PictureWriting dateKey={dateKey} onProgress={onProgress} />;
     case "chinese-reading-comprehension": return <ReadingComprehensionPanel dateKey={dateKey} onProgress={onProgress} />;
-    case "math-arithmetic": return <Arithmetic dateKey={dateKey} onProgress={onProgress} />;
+    case "math-arithmetic": return <Arithmetic dateKey={dateKey} existingResult={existingResult} onProgress={onProgress} />;
     case "math-multiply-divide": return <MultiplyDivide dateKey={dateKey} onProgress={onProgress} />;
     case "math-word-problems": return <WordProblems dateKey={dateKey} onProgress={onProgress} />;
-    case "english-daily": return <EnglishDaily dateKey={dateKey} minimumDuration={minimumDuration} onProgress={onProgress} />;
+    case "english-daily": return <EnglishDaily dateKey={dateKey} />;
     case "sport-rope":
     case "sport-high-jump":
     case "sport-hour": return <SportTask taskId={task.id} onProgress={onProgress} />;
@@ -613,33 +614,6 @@ function speak(text: string, lang = "zh-CN") {
   utterance.pitch = lang.startsWith("zh") ? 1.08 : 1.03;
   utterance.volume = 1;
   speechWindow.speechSynthesis.speak(utterance);
-}
-
-function usePracticeTimer(minimumDuration: number, onProgress: (outcome: TaskOutcome) => void) {
-  const [elapsed, setElapsed] = useState(0);
-  const [running, setRunning] = useState(false);
-  useEffect(() => {
-    if (!running || elapsed >= minimumDuration) return;
-    const id = window.setInterval(() => setElapsed((value) => value + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [running, elapsed, minimumDuration]);
-  useEffect(() => {
-    const ready = elapsed >= minimumDuration;
-    onProgress({ ready, durationSeconds: elapsed, attempts: 1, wrongQuestions: [], evidence: `有效计时${Math.floor(elapsed / 60)}分${elapsed % 60}秒`, message: ready ? "有效练习时间已达标，可以完成任务。" : undefined });
-    if (ready) setRunning(false);
-  }, [elapsed, minimumDuration, onProgress]);
-  return { elapsed, running, setRunning };
-}
-
-function TimerControl({ elapsed, minimumDuration, running, onToggle }: { elapsed: number; minimumDuration: number; running: boolean; onToggle: () => void }) {
-  const remaining = Math.max(0, minimumDuration - elapsed);
-  return (
-    <article className="timer-panel panel">
-      <div><Clock3 size={22} /><strong>有效练习计时</strong></div>
-      <div className="timer">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}</div>
-      <button className="primary" disabled={remaining === 0} onClick={onToggle}>{remaining === 0 ? "计时完成" : running ? "暂停" : "开始计时"}</button>
-    </article>
-  );
 }
 
 function MorningReading({ dateKey }: { dateKey: string }) {
@@ -755,31 +729,34 @@ function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; o
   return <div className="panel"><h3>{item.title}</h3>{item.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}{item.questions.map((question) => <div className="question" key={question.id}><p>{question.prompt}</p>{question.options ? question.options.map((option) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => changeAnswer(question.id, option)} />{option}</label>) : <input value={answers[question.id] ?? ""} onChange={(event) => changeAnswer(question.id, event.target.value)} placeholder="用一句话回答" />}{checked && missingHints[question.id]?.length ? <p className="gentle-retry">还缺少这些要点：{missingHints[question.id].join("、")}</p> : null}{checked ? <p className="answer">参考答案：{question.answer}。{question.explanation}</p> : null}</div>)}<button className="secondary" onClick={check}>核对答案解析</button></div>;
 }
 
-function Arithmetic({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+function Arithmetic({ dateKey, existingResult, onProgress }: { dateKey: string; existingResult?: TaskResult; onProgress: (outcome: TaskOutcome) => void }) {
   const questions = useMemo(() => generateArithmetic(dateKey, 20), [dateKey]);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, string>>(() => Object.fromEntries(Object.entries(existingResult?.answers ?? {}).map(([index, answer]) => [Number(index), answer])));
   const [attempts, setAttempts] = useState(0);
   const [initialWrongIndices, setInitialWrongIndices] = useState<number[] | null>(null);
   const [retryIndices, setRetryIndices] = useState<number[]>([]);
   const displayedIndices = initialWrongIndices === null ? questions.map((_, index) => index) : retryIndices;
+  const allDisplayedAnswersFilled = areAllArithmeticAnswersFilled(questions, answers, displayedIndices);
   const check = () => {
+    if (!allDisplayedAnswersFilled) return;
     const nextAttempts = attempts + 1;
+    const answerSnapshot = Object.fromEntries(Object.entries(answers));
     setAttempts(nextAttempts);
     if (initialWrongIndices === null) {
       const wrong = findWrongArithmeticIndices(questions, answers);
       const firstScore = arithmeticScore(questions.length, wrong.length);
       setInitialWrongIndices(wrong);
       setRetryIndices(wrong);
-      onProgress({ ready: wrong.length === 0, score: firstScore, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((wrongIndex) => questions[wrongIndex].prompt), message: wrong.length ? `首次正确率${firstScore}%，请完成${wrong.length}道错题重练。` : "20道全部答对，可以完成任务。" });
+      onProgress({ ready: wrong.length === 0, score: firstScore, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((wrongIndex) => questions[wrongIndex].prompt), answers: answerSnapshot, message: wrong.length ? `首次正确率${firstScore}%，请完成${wrong.length}道错题重练。` : "20道全部答对，可以完成任务。" });
       return;
     }
     const unresolved = findWrongArithmeticIndices(questions, answers, retryIndices);
     const firstScore = arithmeticScore(questions.length, initialWrongIndices.length);
     const score = arithmeticScore(questions.length, unresolved.length);
     setRetryIndices(unresolved);
-    onProgress({ ready: unresolved.length === 0, score, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: initialWrongIndices.map((wrongIndex) => questions[wrongIndex].prompt), message: unresolved.length ? `已经改对一些，还有${unresolved.length}道再算一次。` : "错题已经全部改对，可以完成任务。" });
+    onProgress({ ready: unresolved.length === 0, score, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: initialWrongIndices.map((wrongIndex) => questions[wrongIndex].prompt), answers: answerSnapshot, message: unresolved.length ? `已经改对一些，还有${unresolved.length}道再算一次。` : "错题已经全部改对，可以完成任务。" });
   };
-  return <div className="panel"><h3>{initialWrongIndices === null ? "100以内正整数加减法 20道" : retryIndices.length ? `错题专项重练 ${retryIndices.length}道` : "错题全部改对"}</h3>{displayedIndices.length ? <div className="arithmetic-grid">{displayedIndices.map((questionIndex) => { const question = questions[questionIndex]; return <label key={`${question.prompt}-${questionIndex}`}><span>{question.prompt}</span><input inputMode="numeric" value={answers[questionIndex] ?? ""} onChange={(event) => setAnswers({ ...answers, [questionIndex]: event.target.value.replace(/\D/g, "") })} /></label>; })}</div> : <div className="mastery-finish"><CheckCircle2 size={30} /><strong>每一道错题都认真改正啦</strong></div>}<button className="primary" disabled={initialWrongIndices !== null && retryIndices.length === 0} onClick={check}>{initialWrongIndices === null ? "核对答案" : "核对错题"}</button></div>;
+  return <div className="panel"><h3>{initialWrongIndices === null ? "100以内正整数加减法 20道" : retryIndices.length ? `错题专项重练 ${retryIndices.length}道` : "错题全部改对"}</h3>{displayedIndices.length ? <div className="arithmetic-grid">{displayedIndices.map((questionIndex) => { const question = questions[questionIndex]; return <label key={`${question.prompt}-${questionIndex}`}><span>{question.prompt}</span><input type="number" inputMode="numeric" pattern="[0-9]*" min="0" step="1" value={answers[questionIndex] ?? ""} onChange={(event) => setAnswers((current) => ({ ...current, [questionIndex]: event.target.value.replace(/\D/g, "") }))} /></label>; })}</div> : <div className="mastery-finish"><CheckCircle2 size={30} /><strong>每一道错题都认真改正啦</strong></div>}<button className="primary" disabled={!allDisplayedAnswersFilled || (initialWrongIndices !== null && retryIndices.length === 0)} onClick={check}>{initialWrongIndices === null ? "核对答案" : "核对错题"}</button></div>;
 }
 
 function normalizeAnswer(value: string) {
@@ -836,12 +813,10 @@ function WordProblems({ dateKey, onProgress }: { dateKey: string; onProgress: (o
   return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" items={items} onProgress={onProgress} />;
 }
 
-function EnglishDaily({ dateKey, minimumDuration, onProgress }: { dateKey: string; minimumDuration: number; onProgress: (outcome: TaskOutcome) => void }) {
+function EnglishDaily({ dateKey }: { dateKey: string }) {
   const lesson = getWeeklyContent(dateFromKey(dateKey)).english;
-  const timer = usePracticeTimer(minimumDuration, onProgress);
   return (
     <div className="panel-list">
-      <TimerControl elapsed={timer.elapsed} minimumDuration={minimumDuration} running={timer.running} onToggle={() => timer.setRunning(!timer.running)} />
       <article className="panel english-lesson-head">
         <p className="eyebrow">译林版二年级上册主题预习 · 原创例句</p>
         <h3>{lesson.unit} · {lesson.title}</h3>

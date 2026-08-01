@@ -22,6 +22,10 @@ export function findWrongArithmeticIndices(questions: ArithmeticQuestionLike[], 
   return indices.filter((index) => Number(answers[index]) !== questions[index].answer);
 }
 
+export function areAllArithmeticAnswersFilled(questions: ArithmeticQuestionLike[], answers: Record<number, string>, indices = questions.map((_, index) => index)) {
+  return indices.every((index) => answers[index]?.trim().length > 0);
+}
+
 export function arithmeticScore(totalQuestions: number, unresolvedWrongCount: number) {
   if (totalQuestions <= 0) return 0;
   return Math.round(((totalQuestions - unresolvedWrongCount) / totalQuestions) * 100);

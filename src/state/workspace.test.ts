@@ -94,6 +94,7 @@ describe("workspace state", () => {
       durationSeconds: 420,
       attempts: 2,
       wrongQuestions: ["36 + 17 ="],
+      answers: { "0": "53", "1": "42" },
     }, today);
 
     expect(completed.taskResults[0]).toMatchObject({
@@ -103,6 +104,7 @@ describe("workspace state", () => {
       durationSeconds: 420,
       attempts: 2,
       wrongQuestions: ["36 + 17 ="],
+      answers: { "0": "53", "1": "42" },
       completedAt: today.toISOString(),
     });
   });
