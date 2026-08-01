@@ -390,7 +390,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     setAuthMessage("登录邮件已发送，请在邮箱中打开链接。 ");
   }, []);
 
-  const pairChild = useCallback(async (code: string, deviceName: string) => {
+  const pairDevice = useCallback(async (code: string, deviceName: string, role: "parent" | "child") => {
     if (!supabase) return;
     let session = sessionRef.current;
     if (!session?.user.is_anonymous) {
@@ -400,10 +400,14 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       session = data.session;
       sessionRef.current = session;
     }
-    const { error: pairError } = await supabase.rpc("claim_pair_code", { p_command_id: commandId(), p_code: code, p_device_name: deviceName || "孩子设备" });
+    const rpcName = role === "parent" ? "claim_parent_pair_code" : "claim_pair_code";
+    const { error: pairError } = await supabase.rpc(rpcName, { p_command_id: commandId(), p_code: code, p_device_name: deviceName || (role === "parent" ? "家长设备" : "孩子设备") });
     if (pairError) throw pairError;
     await initializeSession(session);
   }, [initializeSession]);
+
+  const pairParent = useCallback((code: string, deviceName: string) => pairDevice(code, deviceName, "parent"), [pairDevice]);
+  const pairChild = useCallback((code: string, deviceName: string) => pairDevice(code, deviceName, "child"), [pairDevice]);
 
   const signOut = useCallback(async () => {
     if (!supabase) return;
@@ -517,6 +521,13 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     return data as { code: string; expiresAt: string };
   }, [payload?.role]);
 
+  const createParentPairCode = useCallback(async () => {
+    if (!supabase || payload?.role !== "parent" || !navigator.onLine) throw new Error("请使用联网的家长设备操作。");
+    const { data, error: rpcError } = await supabase.rpc("create_parent_pair_code", { p_command_id: commandId() });
+    if (rpcError) throw rpcError;
+    return data as { code: string; expiresAt: string };
+  }, [payload?.role]);
+
   const revokeDevice = useCallback(async (userId: string) => {
     if (!supabase || payload?.role !== "parent" || !navigator.onLine) throw new Error("请使用联网的家长设备操作。");
     const { error: rpcError } = await supabase.rpc("revoke_child_device", { p_command_id: commandId(), p_user_id: userId });
@@ -538,6 +549,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     legacyPreview,
     setLocalState: setState,
     loginParent,
+    pairParent,
     pairChild,
     signOut,
     refresh,
@@ -555,6 +567,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     purchasePetItem: (itemId: PetItemId) => runMutation("purchase_pet_item", { p_item_id: itemId }),
     interactPet: (action: PetAction, itemId: PetItemId) => runMutation("interact_pet", { p_action: action, p_item_id: itemId }),
     createPairCode,
+    createParentPairCode,
     revokeDevice,
   };
 };
