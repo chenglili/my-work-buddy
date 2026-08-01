@@ -201,7 +201,10 @@ describe("pet care", () => {
 
     expect(pointsFor(monday)).toBe(47);
     expect(pointsFor(sunday)).toBe(37);
-    expect(food.price).toBeLessThanOrEqual(5);
+    expect(food.price).toBe(3);
+    expect(spray.price).toBe(4);
+    expect(bell.price).toBe(20);
+    expect(petItemDefinitions.find((item) => item.id === "apple-bites")!.price).toBe(4);
     expect(bell.price).toBeLessThanOrEqual(pointsFor(monday));
     expect(weeklyBaseline - weeklyCareBudget).toBeGreaterThanOrEqual(250);
   });
@@ -245,10 +248,10 @@ describe("pet care", () => {
     const funded = { ...initialWorkspaceState(today), points: 20 };
     const purchased = purchasePetItem(funded, "parrot-food", today)!;
 
-    expect(purchased.points).toBe(15);
+    expect(purchased.points).toBe(17);
     expect(purchased.pet.inventory["parrot-food"]).toBe(1);
     expect(purchasePetItem(purchased, "apple-bites", today)).not.toBeNull();
-    expect(purchasePetItem({ ...funded, points: 4 }, "parrot-food", today)).toBeNull();
+    expect(purchasePetItem({ ...funded, points: 2 }, "parrot-food", today)).toBeNull();
   });
 
   it("unlocks the bell permanently and allows it to be purchased only once", () => {
@@ -256,7 +259,7 @@ describe("pet care", () => {
     const funded = { ...initialWorkspaceState(today), points: 80 };
     const purchased = purchasePetItem(funded, "bell-toy", today)!;
 
-    expect(purchased.points).toBe(40);
+    expect(purchased.points).toBe(60);
     expect(purchased.pet.ownedToys).toEqual(["bell-toy"]);
     expect(purchasePetItem(purchased, "bell-toy", today)).toBeNull();
   });

@@ -16,10 +16,10 @@ select is((select minimum_score from public.task_definitions where id = 'chinese
 select is((select minimum_duration from public.task_definitions where id = 'chinese-night-reading'), null::integer, 'Chinese night reading has no duration gate');
 select is((select completion_mode from public.task_definitions where id = 'sport-rope'), 'parent', 'sport requires parent review');
 select is((select count(*) from public.pet_item_definitions), 4::bigint, 'all pet supplies are seeded');
-select is((select cost from public.pet_item_definitions where id = 'parrot-food'), 5, 'parrot food costs one standard task');
-select is((select cost from public.pet_item_definitions where id = 'apple-bites'), 8, 'apple bites remain an affordable extra treat');
-select is((select cost from public.pet_item_definitions where id = 'bell-toy'), 40, 'bell toy requires nearly one full daily plan');
-select is((select cost from public.pet_item_definitions where id = 'bath-spray'), 8, 'bath spray fits the two-day care cycle');
+select is((select cost from public.pet_item_definitions where id = 'parrot-food'), 3, 'parrot food uses the reduced pet price');
+select is((select cost from public.pet_item_definitions where id = 'apple-bites'), 4, 'apple bites use the reduced pet price');
+select is((select cost from public.pet_item_definitions where id = 'bell-toy'), 20, 'bell toy uses the reduced pet price');
+select is((select cost from public.pet_item_definitions where id = 'bath-spray'), 4, 'bath spray uses the reduced pet price');
 select is((select satiety_gain from public.pet_item_definitions where id = 'parrot-food'), 14, 'parrot food restores about one day of satiety');
 select is((select cleanliness_gain from public.pet_item_definitions where id = 'bath-spray'), 12, 'bath spray restores about two days of cleanliness');
 select is((select consumable from public.pet_item_definitions where id = 'bell-toy'), false, 'bell toy is durable');

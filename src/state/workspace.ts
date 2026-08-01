@@ -26,10 +26,10 @@ export interface PetState {
 }
 
 export const petItemDefinitions: PetItemDefinition[] = [
-  { id: 'parrot-food', name: '鹦鹉粮', price: 5, kind: 'food', description: '一项基础任务即可兑换，补充当日饱腹度。' },
-  { id: 'apple-bites', name: '苹果粒', price: 8, kind: 'food', description: '额外补充饱腹度和开心度。' },
-  { id: 'bell-toy', name: '叮当铃玩具', price: 40, kind: 'toy', description: '接近完成整套今日任务后永久解锁。' },
-  { id: 'bath-spray', name: '羽毛沐浴喷雾', price: 8, kind: 'care', description: '约每两天使用一次，恢复清洁度。' },
+  { id: 'parrot-food', name: '鹦鹉粮', price: 3, kind: 'food', description: '一项基础任务即可兑换，补充当日饱腹度。' },
+  { id: 'apple-bites', name: '苹果粒', price: 4, kind: 'food', description: '额外补充饱腹度和开心度。' },
+  { id: 'bell-toy', name: '叮当铃玩具', price: 20, kind: 'toy', description: '接近完成整套今日任务后永久解锁。' },
+  { id: 'bath-spray', name: '羽毛沐浴喷雾', price: 4, kind: 'care', description: '约每两天使用一次，恢复清洁度。' },
 ];
 
 export interface TaskResult {
