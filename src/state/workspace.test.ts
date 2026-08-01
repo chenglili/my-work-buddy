@@ -14,6 +14,8 @@ import {
   getMonthlyReport,
   getWeeklyReport,
   initialWorkspaceState,
+  isDailyReadyForNotification,
+  markDailyReadyNotified,
   migrateLegacyState,
   refreshDailyState,
   rejectTaskReview,
@@ -110,6 +112,30 @@ describe("workspace state", () => {
     expect(refreshed.dailyEarnedPoints["2026-07-30"]).toBe(20);
   });
 
+  it("recognizes a daily plan when every required task is completed or waiting for review", () => {
+    const today = day("2026-08-01");
+    const requiredTaskIds = ["math-arithmetic", "english-daily", "sport-hour"];
+    const completed = completeTask(initialWorkspaceState(today), "math-arithmetic", 5, requiredTaskIds, { score: 90 }, today);
+    const withEnglish = submitTaskReview(completed, { id: "english-daily", title: "英语每日听读任务", points: 6 }, {}, today);
+
+    expect(isDailyReadyForNotification(withEnglish, requiredTaskIds)).toBe(false);
+
+    const ready = submitTaskReview(withEnglish, { id: "sport-hour", title: "每日运动总目标", points: 6 }, {}, today);
+    expect(isDailyReadyForNotification(ready, requiredTaskIds)).toBe(true);
+    expect(isDailyReadyForNotification(ready, [])).toBe(false);
+  });
+
+  it("records each daily-ready notification once and preserves it after midnight", () => {
+    const today = day("2026-08-01");
+    const initial = initialWorkspaceState(today);
+    const notified = markDailyReadyNotified(initial);
+    const duplicate = markDailyReadyNotified(notified);
+    const refreshed = refreshDailyState(duplicate, day("2026-08-02"));
+
+    expect(duplicate.notifiedDailyReadyDates).toEqual(["2026-08-01"]);
+    expect(refreshed.notifiedDailyReadyDates).toEqual(["2026-08-01"]);
+  });
+
   it("migrates v1 points, check-in history and redemption records", () => {
     const migrated = migrateLegacyState({
       dateKey: "2026-07-30",
@@ -130,6 +156,7 @@ describe("workspace state", () => {
     expect(migrated.completedTaskIds).toEqual([]);
     expect(migrated.completedDates).toEqual(["2026-07-29", "2026-07-30"]);
     expect(migrated.rewardRequests[0]).toMatchObject({ status: "fulfilled", rewardName: "零食" });
+    expect(migrated.notifiedDailyReadyDates).toEqual([]);
   });
 
   it("calculates a streak from today or yesterday", () => {

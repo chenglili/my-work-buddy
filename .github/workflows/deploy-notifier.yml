@@ -1,0 +1,37 @@
+name: Deploy Feishu Notifier
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate notification configuration
+        working-directory: worker
+        env:
+          KV_NAMESPACE_ID: ${{ vars.CLOUDFLARE_KV_NAMESPACE_ID }}
+        run: |
+          if [[ ! "$KV_NAMESPACE_ID" =~ ^[a-f0-9]{32}$ ]]; then
+            echo "CLOUDFLARE_KV_NAMESPACE_ID must be a 32-character hexadecimal KV namespace ID."
+            exit 1
+          fi
+          sed "s/__KV_NAMESPACE_ID__/$KV_NAMESPACE_ID/" wrangler.toml.template > wrangler.toml
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --config wrangler.toml
+          secrets: |
+            FEISHU_WEBHOOK_URL
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}

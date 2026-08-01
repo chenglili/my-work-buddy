@@ -41,7 +41,9 @@ import {
   getDailyReport,
   getMonthlyReport,
   getWeeklyReport,
+  isDailyReadyForNotification,
   isWeekend,
+  markDailyReadyNotified,
   readStoredState,
   rejectTaskReview,
   refreshDailyState,
@@ -54,6 +56,7 @@ import {
   type PendingTaskReview,
   type WorkspaceState,
 } from "./state/workspace";
+import { sendDailyReadyNotification } from "./services/dailyNotification";
 
 type Route = { view: ViewKey; taskId?: string };
 
@@ -106,6 +109,7 @@ export default function App() {
   const [showVictory, setShowVictory] = useState(false);
   const [parentSession, setParentSession] = useState<{ dateKey: string; pin: string } | null>(null);
   const returnTaskId = useRef<string | null>(null);
+  const notificationAttemptedDate = useRef<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -138,6 +142,33 @@ export default function App() {
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
   const streak = calculateStreak(state.completedDates);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
+  const dailyReadyForNotification = isDailyReadyForNotification(state, requiredTaskIds);
+  const dailyReadyNotificationSent = state.notifiedDailyReadyDates.includes(state.dateKey);
+
+  useEffect(() => {
+    if (!dailyReadyForNotification || dailyReadyNotificationSent) return;
+
+    let active = true;
+    const notify = async () => {
+      if (notificationAttemptedDate.current === state.dateKey) return;
+      notificationAttemptedDate.current = state.dateKey;
+      const result = await sendDailyReadyNotification(state.dateKey);
+      if (!active) return;
+      if (result === "sent") {
+        setState((current) => markDailyReadyNotified(current, state.dateKey));
+      } else {
+        notificationAttemptedDate.current = null;
+      }
+    };
+    const notifyWhenOnline = () => void notify();
+
+    if (navigator.onLine) void notify();
+    window.addEventListener("online", notifyWhenOnline);
+    return () => {
+      active = false;
+      window.removeEventListener("online", notifyWhenOnline);
+    };
+  }, [dailyReadyForNotification, dailyReadyNotificationSent, state.dateKey]);
 
   const markTaskDone = (task: TaskDefinition, outcome: TaskOutcome) => {
     if (task.completionMode !== "auto") {

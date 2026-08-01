@@ -46,6 +46,7 @@ export interface WorkspaceState {
   weeklyPoints: Record<string, number>;
   dailyEarnedPoints: Record<string, number>;
   rewardRequests: RewardRequest[];
+  notifiedDailyReadyDates: string[];
 }
 
 interface LegacyWorkspaceState {
@@ -90,6 +91,7 @@ export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   weeklyPoints: {},
   dailyEarnedPoints: {},
   rewardRequests: [],
+  notifiedDailyReadyDates: [],
 });
 
 export const refreshDailyState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
@@ -173,6 +175,25 @@ export const submitTaskReview = (
       result,
       submittedAt: now.toISOString(),
     }],
+  };
+};
+
+export const isDailyReadyForNotification = (state: WorkspaceState, requiredTaskIds: string[]) => {
+  if (!requiredTaskIds.length) return false;
+  const readyTaskIds = new Set([
+    ...state.completedTaskIds,
+    ...state.pendingTaskReviews
+      .filter((review) => review.dateKey === state.dateKey)
+      .map((review) => review.taskId),
+  ]);
+  return requiredTaskIds.every((taskId) => readyTaskIds.has(taskId));
+};
+
+export const markDailyReadyNotified = (state: WorkspaceState, notifiedDateKey = state.dateKey): WorkspaceState => {
+  if (state.notifiedDailyReadyDates.includes(notifiedDateKey)) return state;
+  return {
+    ...state,
+    notifiedDailyReadyDates: [...state.notifiedDailyReadyDates, notifiedDateKey].sort(),
   };
 };
 
@@ -380,6 +401,7 @@ const normalizeState = (parsed: Partial<WorkspaceState>, today: Date): Workspace
     weeklyPoints: parsed.weeklyPoints ?? {},
     dailyEarnedPoints: parsed.dailyEarnedPoints ?? {},
     rewardRequests: parsed.rewardRequests ?? [],
+    notifiedDailyReadyDates: parsed.notifiedDailyReadyDates ?? [],
   }, today);
 };
 

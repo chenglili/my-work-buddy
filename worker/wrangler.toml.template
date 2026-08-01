@@ -1,0 +1,11 @@
+name = "my-work-buddy-notifier"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://chenglili.github.io"
+
+[[kv_namespaces]]
+binding = "NOTIFICATION_STATE"
+id = "__KV_NAMESPACE_ID__"
