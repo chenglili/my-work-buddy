@@ -609,6 +609,8 @@ function TaskContent({ task, dateKey, existingResult, onProgress }: { task: Task
   }
 }
 
+let speechVoiceRequestId = 0;
+
 function speak(text: string, lang = "zh-CN") {
   const speechWindow = window as unknown as {
     speechSynthesis?: SpeechSynthesis;
@@ -617,6 +619,19 @@ function speak(text: string, lang = "zh-CN") {
   };
   if (!speechWindow.speechSynthesis || !speechWindow.SpeechSynthesisUtterance) {
     speechWindow.alert("当前浏览器暂不支持语音播放，请使用手机自带浏览器、Chrome 或 Safari 打开。");
+    return;
+  }
+  const voiceRequestId = ++speechVoiceRequestId;
+  if (!speechWindow.speechSynthesis.getVoices().length) {
+    const retryWhenVoicesReady = () => {
+      speechWindow.speechSynthesis?.removeEventListener("voiceschanged", retryWhenVoicesReady);
+      if (voiceRequestId === speechVoiceRequestId) speak(text, lang);
+    };
+    speechWindow.speechSynthesis.addEventListener("voiceschanged", retryWhenVoicesReady, { once: true });
+    window.setTimeout(() => {
+      speechWindow.speechSynthesis?.removeEventListener("voiceschanged", retryWhenVoicesReady);
+      if (voiceRequestId === speechVoiceRequestId) speak(text, lang);
+    }, 800);
     return;
   }
   speechWindow.speechSynthesis.cancel();
@@ -633,7 +648,7 @@ function speak(text: string, lang = "zh-CN") {
   const femaleVoice = languageVoices.find((voice) => /female|woman|女|xiaoxiao|xiaoyi|ting-ting|mei-jia|yaoyao|huihui/i.test(voice.name));
   utterance.voice = preferredVoice ?? femaleVoice ?? languageVoices[0] ?? null;
   utterance.rate = lang.startsWith("zh") ? 0.74 : 0.8;
-  utterance.pitch = lang.startsWith("zh") ? 1.08 : 1.03;
+  utterance.pitch = lang.startsWith("zh") ? 1.12 : 1.03;
   utterance.volume = 1;
   speechWindow.speechSynthesis.speak(utterance);
 }
