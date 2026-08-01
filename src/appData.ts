@@ -28,7 +28,7 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
     title: "每日晨读",
     shortTitle: "晨读",
     points: 5,
-    minutes: "10分钟",
+    minutes: "自主安排",
     character: "my-melody",
     summary: "古诗、二上课文片段和组词跟读，排除一年级已背篇目。",
   },
@@ -65,12 +65,12 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
   {
     id: "chinese-night-reading",
     category: "chinese",
-    title: "晚上晚读半小时",
+    title: "晚上晚读",
     shortTitle: "晚读",
     points: 5,
-    minutes: "15分钟",
+    minutes: "自主安排",
     character: "my-melody",
-    summary: "二年级短篇阅读，计时结束后打卡。",
+    summary: "二年级短篇阅读，读完后由孩子自主完成打卡。",
   },
   {
     id: "chinese-picture-writing",
@@ -205,11 +205,11 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
 ];
 
 const taskRules: Record<string, Pick<TaskDefinition, "schedule" | "completionMode" | "minimumScore" | "minimumDuration" | "requiresParent">> = {
-  "chinese-morning-reading": { schedule: "core", completionMode: "timer", minimumDuration: 600, requiresParent: false },
+  "chinese-morning-reading": { schedule: "core", completionMode: "auto", minimumScore: 0, requiresParent: false },
   "chinese-preview-copybook": { schedule: "rotation", completionMode: "parent", requiresParent: true },
   "chinese-memorize": { schedule: "rotation", completionMode: "parent", requiresParent: true },
   "chinese-dictation": { schedule: "rotation", completionMode: "parent", requiresParent: true },
-  "chinese-night-reading": { schedule: "core", completionMode: "timer", minimumDuration: 900, requiresParent: false },
+  "chinese-night-reading": { schedule: "core", completionMode: "auto", minimumScore: 0, requiresParent: false },
   "chinese-picture-writing": { schedule: "rotation", completionMode: "parent", requiresParent: true },
   "chinese-reading-comprehension": { schedule: "rotation", completionMode: "auto", minimumScore: 80, requiresParent: false },
   "math-arithmetic": { schedule: "core", completionMode: "auto", minimumScore: 80, requiresParent: false },

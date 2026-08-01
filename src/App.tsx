@@ -527,10 +527,11 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
 }
 
 function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
-  const [outcome, setOutcome] = useState<TaskOutcome>(completed ? { ...emptyOutcome, ready: true } : emptyOutcome);
+  const directCompletion = task.completionMode === "auto" && task.minimumScore === 0;
+  const [outcome, setOutcome] = useState<TaskOutcome>(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成朗读" : undefined, message: directCompletion ? "读完后，可以直接完成任务。" : undefined } : emptyOutcome);
   useEffect(() => {
-    setOutcome(completed ? { ...emptyOutcome, ready: true } : emptyOutcome);
-  }, [task.id, completed]);
+    setOutcome(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成朗读" : undefined, message: directCompletion ? "读完后，可以直接完成任务。" : undefined } : emptyOutcome);
+  }, [task.id, completed, directCompletion]);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
 
@@ -567,11 +568,11 @@ function completionHint(task: TaskDefinition) {
 function TaskContent({ task, dateKey, onProgress }: { task: TaskDefinition; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const minimumDuration = task.minimumDuration ?? 0;
   switch (task.id) {
-    case "chinese-morning-reading": return <MorningReading dateKey={dateKey} minimumDuration={minimumDuration} onProgress={onProgress} />;
+    case "chinese-morning-reading": return <MorningReading dateKey={dateKey} />;
     case "chinese-preview-copybook": return <CopybookPreview dateKey={dateKey} onProgress={onProgress} />;
     case "chinese-memorize": return <Memorize dateKey={dateKey} onProgress={onProgress} />;
     case "chinese-dictation": return <Dictation dateKey={dateKey} onProgress={onProgress} />;
-    case "chinese-night-reading": return <NightReading dateKey={dateKey} minimumDuration={minimumDuration} onProgress={onProgress} />;
+    case "chinese-night-reading": return <NightReading dateKey={dateKey} />;
     case "chinese-picture-writing": return <PictureWriting dateKey={dateKey} onProgress={onProgress} />;
     case "chinese-reading-comprehension": return <ReadingComprehensionPanel dateKey={dateKey} onProgress={onProgress} />;
     case "math-arithmetic": return <Arithmetic dateKey={dateKey} onProgress={onProgress} />;
@@ -601,11 +602,13 @@ function speak(text: string, lang = "zh-CN") {
   const voices = speechWindow.speechSynthesis.getVoices();
   const languageVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
   const preferredNames = lang.startsWith("zh")
-    ? ["Xiaoxiao", "晓晓", "Ting-Ting", "Mei-Jia", "Yaoyao", "Huihui", "Google 普通话"]
+    ? ["Xiaoxiao", "晓晓", "Xiaoyi", "晓伊", "Ting-Ting", "Mei-Jia", "Yaoyao", "Huihui", "Google 普通话"]
     : lang === "en-GB"
       ? ["Sonia", "Libby", "Serena", "Stephanie", "Google UK English Female", "Jenny", "Samantha"]
       : ["Jenny", "Samantha", "Aria", "Ava", "Google US English"];
-  utterance.voice = preferredNames.map((name) => languageVoices.find((voice) => voice.name.includes(name))).find(Boolean) ?? languageVoices[0] ?? null;
+  const preferredVoice = preferredNames.map((name) => languageVoices.find((voice) => voice.name.includes(name))).find(Boolean);
+  const femaleVoice = languageVoices.find((voice) => /female|woman|女|xiaoxiao|xiaoyi|ting-ting|mei-jia|yaoyao|huihui/i.test(voice.name));
+  utterance.voice = preferredVoice ?? femaleVoice ?? languageVoices[0] ?? null;
   utterance.rate = lang.startsWith("zh") ? 0.74 : 0.8;
   utterance.pitch = lang.startsWith("zh") ? 1.08 : 1.03;
   utterance.volume = 1;
@@ -639,13 +642,11 @@ function TimerControl({ elapsed, minimumDuration, running, onToggle }: { elapsed
   );
 }
 
-function MorningReading({ dateKey, minimumDuration, onProgress }: { dateKey: string; minimumDuration: number; onProgress: (outcome: TaskOutcome) => void }) {
+function MorningReading({ dateKey }: { dateKey: string }) {
   const content = getWeeklyContent(dateFromKey(dateKey));
   const poem = chineseReadings[Math.floor(dateFromKey(dateKey).getDate() / 7) % chineseReadings.length];
-  const timer = usePracticeTimer(minimumDuration, onProgress);
   return (
     <div className="panel-list">
-      <TimerControl elapsed={timer.elapsed} minimumDuration={minimumDuration} running={timer.running} onToggle={() => timer.setRunning(!timer.running)} />
       <div className="content-grid">
         <article className="panel"><h3>{poem.title}</h3><p className="muted">{poem.author} · 公版古诗</p>{poem.lines.map((line) => <p className="poem-line" key={line}>{line}</p>)}<p className="reading-tip">朗读小提示：{poem.readingTip}</p><div className="focus-chips">{poem.focus.map((word) => <span key={word}>{word}</span>)}</div><button className="secondary" onClick={() => speak(poem.lines.join(""))}><Play size={16} />跟读播放</button></article>
         <article className="panel"><h3>{content.readingTitle}</h3><p>{content.readingText}</p><p className="muted">本周生字：{content.words.map((item) => `${item.word}-${item.group}`).join("、")}</p><button className="secondary" onClick={() => speak(content.readingText)}><Play size={16} />课文跟读</button></article>
@@ -710,10 +711,9 @@ function Dictation({ dateKey, onProgress }: { dateKey: string; onProgress: (outc
   return <div className="panel dictation"><h3>语音听写</h3><p>当前第 {index + 1} / {words.length} 个。播放后留出书写时间，可重复播放。</p><div className="dictation-word">{showAnswers ? "逐词核对" : "请听语音写词语"}</div>{!showAnswers ? <div className="inline-actions"><button className="primary" onClick={playCurrent}><Play size={16} />播放词语</button><button className="secondary" onClick={playCurrent}><RotateCcw size={16} />重复播放</button><button className="secondary" onClick={next}>{index >= words.length - 1 ? "显示答案并自评" : "下一个"}</button></div> : <div className="dictation-review-list">{words.map((word, wordIndex) => <div className="dictation-review-row" key={word}><strong>{word}</strong><div className="dictation-rating" role="group" aria-label={`${word}听写自评`}><button className={ratings[wordIndex] === "correct" ? "selected correct" : "secondary"} onClick={() => setRatings((values) => ({ ...values, [wordIndex]: "correct" }))}>会写</button><button className={ratings[wordIndex] === "retry" ? "selected retry" : "secondary"} onClick={() => setRatings((values) => ({ ...values, [wordIndex]: "retry" }))}>需再练</button></div>{ratings[wordIndex] === "retry" ? <button className={replayedIndices.includes(wordIndex) ? "secondary replayed" : "secondary"} onClick={() => replayWrongWord(wordIndex)}><Play size={15} />{replayedIndices.includes(wordIndex) ? "已重听" : "重听一次"}</button> : null}</div>)}</div>}</div>;
 }
 
-function NightReading({ dateKey, minimumDuration, onProgress }: { dateKey: string; minimumDuration: number; onProgress: (outcome: TaskOutcome) => void }) {
+function NightReading({ dateKey }: { dateKey: string }) {
   const content = getWeeklyContent(dateFromKey(dateKey));
-  const timer = usePracticeTimer(minimumDuration, onProgress);
-  return <div className="panel-list"><TimerControl elapsed={timer.elapsed} minimumDuration={minimumDuration} running={timer.running} onToggle={() => timer.setRunning(!timer.running)} /><article className="panel"><h3>{content.readingTitle}</h3><p>{content.readingText}</p><button className="secondary" onClick={() => speak(content.readingText)}><Play size={16} />听读文本</button></article></div>;
+  return <div className="panel-list"><article className="panel"><h3>{content.readingTitle}</h3><p>{content.readingText}</p><button className="secondary" onClick={() => speak(content.readingText)}><Play size={16} />听读文本</button></article></div>;
 }
 
 function PictureWriting({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {

@@ -1,5 +1,5 @@
 begin;
-select plan(51);
+select plan(57);
 
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
@@ -8,6 +8,12 @@ select is((select cost from public.reward_definitions where id = 'reward-cartoon
 select is((select cost from public.reward_definitions where id = 'reward-toy'), 250, 'toy costs 250 points');
 select is((select completion_mode from public.task_definitions where id = 'english-daily'), 'timer', 'English uses timer completion');
 select is((select minimum_duration from public.task_definitions where id = 'english-daily'), 900, 'English requires fifteen effective minutes');
+select is((select completion_mode from public.task_definitions where id = 'chinese-morning-reading'), 'auto', 'Chinese morning reading uses direct completion');
+select is((select minimum_score from public.task_definitions where id = 'chinese-morning-reading'), 0, 'Chinese morning reading has no score gate');
+select is((select minimum_duration from public.task_definitions where id = 'chinese-morning-reading'), null::integer, 'Chinese morning reading has no duration gate');
+select is((select completion_mode from public.task_definitions where id = 'chinese-night-reading'), 'auto', 'Chinese night reading uses direct completion');
+select is((select minimum_score from public.task_definitions where id = 'chinese-night-reading'), 0, 'Chinese night reading has no score gate');
+select is((select minimum_duration from public.task_definitions where id = 'chinese-night-reading'), null::integer, 'Chinese night reading has no duration gate');
 select is((select completion_mode from public.task_definitions where id = 'sport-rope'), 'parent', 'sport requires parent review');
 select is((select count(*) from public.pet_item_definitions), 4::bigint, 'all pet supplies are seeded');
 select is((select cost from public.pet_item_definitions where id = 'parrot-food'), 5, 'parrot food costs one standard task');
