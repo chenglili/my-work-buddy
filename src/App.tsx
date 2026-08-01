@@ -79,6 +79,7 @@ import {
   type PetAction,
   type PetItemId,
   type PetLastAction,
+  type PetState,
   type WorkspaceState,
 } from "./state/workspace";
 import { sendDailyReadyNotification } from "./services/dailyNotification";
@@ -1100,17 +1101,65 @@ function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcom
   return <div className="panel"><h3>{config.title}</h3><p>运动前先热身，完成后提交到今日家长审核。动作不舒服时应立即停止。</p><label>完成数量或时长（{config.unit}）<input className="wide-input" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value.replace(/\D/g, ""))} placeholder={`目标${config.target}${config.unit}`} /></label></div>;
 }
 
+type PetSceneHotspotId = "food" | "apple" | "bell" | "bath";
+
+interface PetSceneHotspotDefinition {
+  id: PetSceneHotspotId;
+  action: PetAction;
+  itemId: PetItemId;
+  label: string;
+  className: string;
+  emptyMessage: string;
+}
+
+export const petSceneHotspots: readonly PetSceneHotspotDefinition[] = [
+  { id: "food", action: "feed", itemId: "parrot-food", label: "食盆", className: "food", emptyMessage: "饭盆空啦，嘟嘟决定啃两口鸟架。" },
+  { id: "apple", action: "feed", itemId: "apple-bites", label: "苹果", className: "apple", emptyMessage: "苹果还没补货，嘟嘟先把笑容收起来。" },
+  { id: "bell", action: "play", itemId: "bell-toy", label: "铃铛", className: "bell", emptyMessage: "铃铛还没买到，嘟嘟先用翅膀打节拍。" },
+  { id: "bath", action: "bathe", itemId: "bath-spray", label: "浴盆", className: "bath", emptyMessage: "羽毛水疗用品告急，嘟嘟暂时拒绝出浴。" },
+];
+
+export const petHotspotIsAvailable = (pet: Pick<PetState, "inventory" | "ownedToys">, itemId: PetItemId) => itemId === "bell-toy"
+  ? pet.ownedToys.includes(itemId)
+  : (pet.inventory[itemId] ?? 0) > 0;
+
+const petSceneLines: Record<PetSceneHotspotId, string[]> = {
+  food: ["开饭开饭！嘟嘟的饭盆今天准时营业。", "这一口很专业，嘟嘟给你盖章五星好饭。", "别看我小，饭量可是有鸟格的。"],
+  apple: ["苹果粒到嘴，嘟嘟宣布今天是甜甜的一天。", "咔嚓！这口苹果比铃铛还响。", "嘟嘟吃完这颗，马上恢复可爱营业。"],
+  bell: ["叮叮当！嘟嘟的鸟架演唱会开场啦。", "请欣赏嘟嘟的铃铛独奏，掌声不许停。", "铃声一响，嘟嘟的脚就自动开始蹦迪。"],
+  bath: ["水花退散！嘟嘟现在闪亮得可以当小灯泡。", "羽毛洗好了，今天也要神气登场。", "嘟嘟洗完澡，连风都要排队来摸羽毛。"],
+};
+
+const petPurchaseLines = ["新货到架！嘟嘟批准这次消费。", "积分变成用品啦，嘟嘟马上安排上。", "快递到达鸟架，嘟嘟准备拆箱表演。"];
+
+const choosePetLine = (lines: string[]) => lines[Math.floor(Math.random() * lines.length)];
+
 function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; cloud: CloudWorkspaceController; onToast: (message: string) => void }) {
   const [busy, setBusy] = useState("");
   const [motion, setMotion] = useState<PetLastAction>("idle");
   const [motionKey, setMotionKey] = useState(0);
+  const [dialogueOverride, setDialogueOverride] = useState("");
+  const motionTimer = useRef<number | null>(null);
+  const dialogueTimer = useRef<number | null>(null);
   const pet = state.pet;
   const itemCount = (itemId: PetItemId) => pet.inventory[itemId] ?? 0;
-  const hasToy = pet.ownedToys.includes("bell-toy");
+
+  useEffect(() => () => {
+    if (motionTimer.current) window.clearTimeout(motionTimer.current);
+    if (dialogueTimer.current) window.clearTimeout(dialogueTimer.current);
+  }, []);
+
+  const showDialogue = (message: string) => {
+    setDialogueOverride(message);
+    if (dialogueTimer.current) window.clearTimeout(dialogueTimer.current);
+    dialogueTimer.current = window.setTimeout(() => setDialogueOverride(""), 4600);
+  };
 
   const animate = (action: PetLastAction) => {
     setMotion(action);
     setMotionKey((value) => value + 1);
+    if (motionTimer.current) window.clearTimeout(motionTimer.current);
+    motionTimer.current = window.setTimeout(() => setMotion("idle"), action === "play" ? 920 : 820);
   };
 
   const buyItem = async (itemId: PetItemId) => {
@@ -1123,72 +1172,62 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
         if (!next) throw new Error(item.kind === "toy" && pet.ownedToys.includes(itemId) ? "already owned" : "insufficient points");
         setState(next);
       }
+      const line = choosePetLine(petPurchaseLines);
       animate("purchase");
+      showDialogue(line);
+      speak(line);
       onToast(`${item.name}已购买，花费${item.price}积分。`);
     } catch (error) {
-      onToast(petOperationError(error));
+      const message = petOperationError(error);
+      showDialogue(message);
+      speak(message);
+      onToast(message);
     } finally {
       setBusy("");
     }
   };
 
-  const interact = async (action: PetAction, itemId: PetItemId, successMessage: string) => {
-    setBusy(`${action}-${itemId}`);
+  const interact = async (hotspot: PetSceneHotspotDefinition) => {
+    const line = choosePetLine(petSceneLines[hotspot.id]);
+    setBusy(`${hotspot.action}-${hotspot.itemId}`);
     try {
-      if (cloud.enabled) await cloud.interactPet(action, itemId);
+      if (cloud.enabled) await cloud.interactPet(hotspot.action, hotspot.itemId);
       else {
-        const next = interactWithPet(state, action, itemId);
+        const next = interactWithPet(state, hotspot.action, hotspot.itemId);
         if (!next) throw new Error("pet item unavailable");
         setState(next);
       }
-      animate(action);
-      onToast(successMessage);
+      animate(hotspot.action);
+      showDialogue(line);
+      speak(line);
+      onToast(line);
     } catch (error) {
-      onToast(petOperationError(error));
+      const message = petOperationError(error);
+      showDialogue(message);
+      speak(message);
+      onToast(message);
     } finally {
       setBusy("");
     }
   };
 
   const statuses = [
-    { label: "饱腹度", value: pet.satiety, className: "satiety", icon: <Utensils size={19} /> },
-    { label: "开心度", value: pet.happiness, className: "happiness", icon: <Heart size={19} /> },
-    { label: "清洁度", value: pet.cleanliness, className: "cleanliness", icon: <Droplets size={19} /> },
-  ];
-  const interactions: Array<{ action: PetAction; itemId: PetItemId; label: string; detail: string; disabled: boolean; success: string }> = [
-    { action: "feed", itemId: "parrot-food", label: "喂鹦鹉粮", detail: itemCount("parrot-food") ? `库存 ${itemCount("parrot-food")} 份` : "本鸟的饭碗空着呢", disabled: itemCount("parrot-food") < 1, success: "嘟嘟吃饱了，饱腹度上升。" },
-    { action: "feed", itemId: "apple-bites", label: "喂苹果粒", detail: itemCount("apple-bites") ? `库存 ${itemCount("apple-bites")} 份` : "没有苹果，笑容暂停", disabled: itemCount("apple-bites") < 1, success: "苹果粒投喂成功，嘟嘟心情大好。" },
-    { action: "play", itemId: "bell-toy", label: "摇铃逗玩", detail: hasToy ? "叮当铃已就位" : "缺一件响当当的玩具", disabled: !hasToy, success: "嘟嘟追着铃声蹦了起来。" },
-    { action: "bathe", itemId: "bath-spray", label: "洗香香", detail: itemCount("bath-spray") ? `喷雾 ${itemCount("bath-spray")} 瓶` : "羽毛水疗用品告急", disabled: itemCount("bath-spray") < 1, success: "洗澡完成，嘟嘟的羽毛又精神了。" },
+    { label: "饱腹度", value: pet.satiety, className: "satiety", icon: <Utensils size={18} /> },
+    { label: "开心度", value: pet.happiness, className: "happiness", icon: <Heart size={18} /> },
+    { label: "清洁度", value: pet.cleanliness, className: "cleanliness", icon: <Droplets size={18} /> },
   ];
 
   return (
     <section className="pet-page">
       <header className="pet-page-heading">
-        <div><p className="eyebrow">今日营业中</p><h2>{pet.name}的小屋</h2><p>嘟嘟正在巡视地盘，顺便检查今天的零食库存。</p></div>
+        <div><p className="eyebrow">今日营业中</p><h2>{pet.name}的小屋</h2><p>点一点鸟架上的东西，看看嘟嘟会做什么。</p></div>
         <div className="pet-balance"><Star size={21} /><span>可用积分</span><strong>{state.points}</strong></div>
       </header>
 
       <section className="pet-habitat" aria-label="嘟嘟的互动空间">
-        <div className="pet-stage">
-          <div className="pet-speech" aria-live="polite" aria-atomic="true"><Bird size={22} /><p>{pet.lastMessage}</p></div>
-          <figure>
-            <div className="pet-photo" role="img" aria-label={`${pet.name}，一只站在木质鸟架上的小太阳鹦鹉`}>
-              <img key={`${motion}-${motionKey}`} className={`pet-character pet-motion-${motion}`} src="pets/sun-conure-cutout-v4.webp" alt="" />
-              <img className="pet-perch-foreground" src="pets/sun-conure-perch-front-v2.png" alt="" />
-            </div>
-            <figcaption><strong>{pet.name}</strong><small>{petStatusTitle(pet.satiety, pet.happiness, pet.cleanliness)}</small></figcaption>
-          </figure>
-        </div>
-
-        <div className="pet-care-panel">
-          <div className="pet-status-heading"><div><p className="eyebrow">实时状态</p><h3>今天也要神气登场</h3></div><img src="pets/sun-conure-avatar-256.webp" alt="" /></div>
-          <div className="pet-status-list">
-            {statuses.map((status) => <div className="pet-status" key={status.label}><div><span>{status.icon}{status.label}</span><strong>{status.value}</strong></div><div className={`pet-status-track ${status.className}`} role="progressbar" aria-label={status.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={status.value}><span style={{ width: `${status.value}%` }} /></div></div>)}
-          </div>
-          <div className="pet-actions" aria-label="照顾嘟嘟">
-            {interactions.map((option) => <button className={`pet-action pet-action-${option.action}`} key={`${option.action}-${option.itemId}`} disabled={Boolean(busy) || option.disabled} onClick={() => void interact(option.action, option.itemId, option.success)}><PetSupplyIcon itemId={option.itemId} size={23} /><span><strong>{option.label}</strong><small>{busy === `${option.action}-${option.itemId}` ? "嘟嘟正在配合……" : option.detail}</small></span></button>)}
-          </div>
+        <PetScene pet={pet} speech={dialogueOverride || pet.lastMessage} motion={motion} motionKey={motionKey} busy={busy} onInteract={(hotspot) => void interact(hotspot)} />
+        <div className="pet-status-strip" aria-label="嘟嘟的实时状态">
+          {statuses.map((status) => <div className={`pet-status-chip ${status.className}`} key={status.label}><div><span>{status.icon}{status.label}</span><strong>{status.value}</strong></div><div className="pet-status-track" role="progressbar" aria-label={status.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={status.value}><span style={{ width: `${status.value}%` }} /></div></div>)}
         </div>
       </section>
 
@@ -1211,6 +1250,36 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
       </section>
     </section>
   );
+}
+
+function PetScene({ pet, speech, motion, motionKey, busy, onInteract }: { pet: PetState; speech: string; motion: PetLastAction; motionKey: number; busy: string; onInteract: (hotspot: PetSceneHotspotDefinition) => void }) {
+  return <div className="pet-scene">
+    <div className="pet-speech" aria-live="polite" aria-atomic="true"><Bird size={22} /><p>{speech}</p></div>
+    <figure className="pet-scene-figure">
+      <div className="pet-photo" role="img" aria-label={`${pet.name}站在鸟架上`}>
+        <img key={`${motion}-${motionKey}`} className={`pet-character pet-motion-${motion}`} src="pets/sun-conure-cutout-v4.webp" alt="" />
+        <PetFeedback motion={motion} motionKey={motionKey} />
+        <img className="pet-perch-foreground" src="pets/sun-conure-perch-front-v2.png" alt="" />
+        <div className="pet-hotspots" aria-label="鸟架互动热点">
+          {petSceneHotspots.map((hotspot) => {
+            const available = petHotspotIsAvailable(pet, hotspot.itemId);
+            const isBusy = busy === `${hotspot.action}-${hotspot.itemId}`;
+            const count = hotspot.itemId === "bell-toy" ? (available ? "已拥有" : "未购买") : `${pet.inventory[hotspot.itemId] ?? 0}份`;
+            return <button className={`pet-hotspot pet-hotspot-${hotspot.className}${available ? "" : " is-empty"}${isBusy ? " is-busy" : ""}`} type="button" disabled={Boolean(busy) || !available} title={available ? `${hotspot.label}：${count}` : hotspot.emptyMessage} aria-label={`${hotspot.label}，${available ? count : hotspot.emptyMessage}`} key={hotspot.id} onClick={() => onInteract(hotspot)}><span className="pet-hotspot-icon"><PetSupplyIcon itemId={hotspot.itemId} size={22} /></span><span className="pet-hotspot-copy"><strong>{hotspot.label}</strong><small>{isBusy ? "嘟嘟准备中" : available ? count : hotspot.emptyMessage}</small></span></button>;
+          })}
+        </div>
+      </div>
+      <figcaption><strong>{pet.name}</strong><small>{petStatusTitle(pet.satiety, pet.happiness, pet.cleanliness)}</small></figcaption>
+    </figure>
+  </div>;
+}
+
+function PetFeedback({ motion, motionKey }: { motion: PetLastAction; motionKey: number }) {
+  if (motion === "feed") return <div className="pet-feedback pet-feedback-feed" key={motionKey} aria-hidden="true"><span><Utensils size={17} /></span><span>✦</span><span>•</span></div>;
+  if (motion === "play") return <div className="pet-feedback pet-feedback-play" key={motionKey} aria-hidden="true"><span><Bell size={17} /></span><span>♪</span><span>♡</span></div>;
+  if (motion === "bathe") return <div className="pet-feedback pet-feedback-bathe" key={motionKey} aria-hidden="true"><span><Droplets size={18} /></span><span>•</span><span>✦</span></div>;
+  if (motion === "purchase") return <div className="pet-feedback pet-feedback-purchase" key={motionKey} aria-hidden="true"><span><Star size={17} /></span><span>✦</span><span>✦</span></div>;
+  return null;
 }
 
 function PetSupplyIcon({ itemId, size }: { itemId: PetItemId; size: number }) {

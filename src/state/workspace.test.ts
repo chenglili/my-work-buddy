@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
-import { generateArithmetic } from "../App";
+import { generateArithmetic, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
   approveAllTaskReviews,
@@ -211,6 +211,31 @@ describe("pet care", () => {
 
     expect(state.pet.name).toBe("嘟嘟");
     expect(normalized.pet.name).toBe("嘟嘟");
+  });
+
+  it("maps the four pet-house hotspots to the existing pet actions", () => {
+    expect(petSceneHotspots.map(({ id, action, itemId }) => ({ id, action, itemId }))).toEqual([
+      { id: "food", action: "feed", itemId: "parrot-food" },
+      { id: "apple", action: "feed", itemId: "apple-bites" },
+      { id: "bell", action: "play", itemId: "bell-toy" },
+      { id: "bath", action: "bathe", itemId: "bath-spray" },
+    ]);
+  });
+
+  it("only enables a hotspot when its inventory or toy ownership is ready", () => {
+    const state = initialWorkspaceState(day("2026-08-01"));
+    expect(petHotspotIsAvailable(state.pet, "parrot-food")).toBe(false);
+    expect(petHotspotIsAvailable(state.pet, "bell-toy")).toBe(false);
+
+    const readyPet = {
+      ...state.pet,
+      inventory: { "parrot-food": 1, "apple-bites": 1, "bath-spray": 1 },
+      ownedToys: ["bell-toy" as const],
+    };
+    expect(petHotspotIsAvailable(readyPet, "parrot-food")).toBe(true);
+    expect(petHotspotIsAvailable(readyPet, "apple-bites")).toBe(true);
+    expect(petHotspotIsAvailable(readyPet, "bath-spray")).toBe(true);
+    expect(petHotspotIsAvailable(readyPet, "bell-toy")).toBe(true);
   });
 
   it("buys consumables immediately and rejects a purchase without enough points", () => {
