@@ -109,6 +109,7 @@ const encouragements = [
 ];
 
 const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
+
 const formatDate = (value: string) => value.slice(5).replace("-", "/");
 
 export const generateArithmetic = (seedText: string, count = 20): ArithmeticQuestion[] => {
@@ -139,7 +140,6 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [showVictory, setShowVictory] = useState(false);
   const [parentSession, setParentSession] = useState<{ dateKey: string; pin: string } | null>(null);
-  const returnTaskId = useRef<string | null>(null);
   const notificationAttemptedDate = useRef<string | null>(null);
   const previousCloudBonus = useRef<boolean | null>(null);
 
@@ -169,14 +169,6 @@ export default function App() {
   }, [state.bonusAwarded, workspace.enabled, workspace.mode]);
 
   useEffect(() => {
-    if (!route.taskId && returnTaskId.current) {
-      const taskId = returnTaskId.current;
-      returnTaskId.current = null;
-      window.requestAnimationFrame(() => {
-        document.querySelector(`[data-task-id="${taskId}"]`)?.scrollIntoView({ block: "center", behavior: "auto" });
-      });
-      return;
-    }
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [route.view, route.taskId]);
 
@@ -237,14 +229,12 @@ export default function App() {
   };
 
   const navigate = (view: ViewKey) => {
-    returnTaskId.current = null;
     setRoute({ view });
   };
   const openTask = (taskId: string) => setRoute({ view: taskCatalog.find((task) => task.id === taskId)?.category ?? "home", taskId });
   const returnToSection = () => {
     if (!currentTask) return;
-    returnTaskId.current = currentTask.id;
-    setRoute({ view: currentTask.category });
+    navigate(currentTask.category);
   };
 
   if (workspace.enabled && workspace.mode !== "ready") return <CloudAccessGate workspace={workspace} />;
@@ -611,7 +601,105 @@ function TaskContent({ task, dateKey, existingResult, onProgress }: { task: Task
 
 let speechVoiceRequestId = 0;
 
+const chineseFemaleVoiceNames = [
+  "Xiaoxiao",
+  "Xiaoyi",
+  "Ting-Ting",
+  "Mei-Jia",
+  "Yaoyao",
+  "Huihui",
+  "Siri",
+  "\u6653\u6653",
+  "\u6653\u4f0a",
+  "\u4e01\u4e01",
+  "\u7f8e\u52a0",
+];
+
+const speechMaleVoicePattern = /yunxi|yunyang|yunjian|yunfeng|google.*\u666e\u901a\u8bdd|male|man|\u4e91\u5e0c|\u4e91\u626c|\u4e91\u5065|\u4e91\u67ab/i;
+
+function selectSpeechVoice(voices: SpeechSynthesisVoice[], lang: string) {
+  const language = lang.slice(0, 2).toLowerCase();
+  const languageVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(language));
+  const candidates = languageVoices.length > 0 ? languageVoices : voices;
+  const isChinese = lang.toLowerCase().startsWith("zh");
+  const labelOf = (voice: SpeechSynthesisVoice) => `${voice.name} ${voice.voiceURI}`;
+  const isFemale = (voice: SpeechSynthesisVoice) => {
+    const label = labelOf(voice);
+    return !speechMaleVoicePattern.test(label) && (isChinese
+      ? chineseFemaleVoiceNames.some((name) => label.toLowerCase().includes(name.toLowerCase()))
+        || /female|woman|\u5973\u58f0/i.test(label)
+      : /female|woman|samantha|jenny|sonia|libby|serena|stephanie|aria|ava/i.test(label));
+  };
+  const preferred = isChinese
+    ? chineseFemaleVoiceNames
+    : ["Sonia", "Libby", "Serena", "Stephanie", "Jenny", "Samantha", "Aria", "Ava"];
+  const selected = candidates.find(isFemale)
+    ?? preferred
+      .map((name) => candidates.find((voice) => labelOf(voice).toLowerCase().includes(name.toLowerCase())))
+      .find((voice): voice is SpeechSynthesisVoice => {
+        if (!voice) return false;
+        return !speechMaleVoicePattern.test(labelOf(voice));
+      })
+    ?? candidates.find((voice) => !speechMaleVoicePattern.test(labelOf(voice)))
+    ?? candidates[0];
+  return { voice: selected ?? null, isFemale: Boolean(selected && isFemale(selected)) };
+}
+
 function speak(text: string, lang = "zh-CN") {
+  const speechWindow = window as unknown as {
+    speechSynthesis?: SpeechSynthesis;
+    SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance;
+    alert: (message: string) => void;
+  };
+  if (!speechWindow.speechSynthesis || !speechWindow.SpeechSynthesisUtterance) {
+    speechWindow.alert("当前浏览器暂不支持语音播放，请使用手机自带浏览器、Chrome 或 Safari 打开。");
+    return;
+  }
+  const synthesis = speechWindow.speechSynthesis;
+  const Utterance = speechWindow.SpeechSynthesisUtterance;
+  const voiceRequestId = ++speechVoiceRequestId;
+  let waitingForVoices = false;
+  let retryTimer: number | undefined;
+  const speakWithAvailableVoice = (allowFallback: boolean) => {
+    if (voiceRequestId !== speechVoiceRequestId) return;
+    const voices = synthesis.getVoices();
+    if (!voices.length) {
+      if (waitingForVoices) return;
+      waitingForVoices = true;
+      const retryWhenVoicesReady = () => {
+        synthesis.removeEventListener("voiceschanged", retryWhenVoicesReady);
+        if (retryTimer) window.clearTimeout(retryTimer);
+        speakWithAvailableVoice(true);
+      };
+      synthesis.addEventListener("voiceschanged", retryWhenVoicesReady, { once: true });
+      retryTimer = window.setTimeout(retryWhenVoicesReady, 1200);
+      return;
+    }
+    const selection = selectSpeechVoice(voices, lang);
+    if (lang.toLowerCase().startsWith("zh") && !selection.isFemale && !allowFallback && !waitingForVoices) {
+      waitingForVoices = true;
+      const retryWhenVoicesReady = () => {
+        synthesis.removeEventListener("voiceschanged", retryWhenVoicesReady);
+        if (retryTimer) window.clearTimeout(retryTimer);
+        speakWithAvailableVoice(true);
+      };
+      synthesis.addEventListener("voiceschanged", retryWhenVoicesReady, { once: true });
+      retryTimer = window.setTimeout(retryWhenVoicesReady, 1200);
+      return;
+    }
+    synthesis.cancel();
+    const utterance = new Utterance(text);
+    utterance.lang = lang;
+    utterance.voice = selection.voice;
+    utterance.rate = lang.toLowerCase().startsWith("zh") ? 0.74 : 0.8;
+    utterance.pitch = lang.toLowerCase().startsWith("zh") ? (selection.isFemale ? 1.12 : 1.22) : 1.03;
+    utterance.volume = 1;
+    synthesis.speak(utterance);
+  };
+  speakWithAvailableVoice(false);
+}
+
+function legacySpeak(text: string, lang = "zh-CN") {
   const speechWindow = window as unknown as {
     speechSynthesis?: SpeechSynthesis;
     SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance;
