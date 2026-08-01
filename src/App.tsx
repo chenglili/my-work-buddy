@@ -5,12 +5,18 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Cloud,
+  CloudOff,
   Clock3,
   Gift,
   LockKeyhole,
+  LogOut,
+  Mail,
   Play,
+  RefreshCw,
   RotateCcw,
   ShoppingBag,
+  Smartphone,
   Star,
   Trophy,
 } from "lucide-react";
@@ -57,6 +63,8 @@ import {
   type WorkspaceState,
 } from "./state/workspace";
 import { sendDailyReadyNotification } from "./services/dailyNotification";
+import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
+import type { CloudWorkspaceController } from "./cloud/types";
 
 type Route = { view: ViewKey; taskId?: string };
 
@@ -103,26 +111,41 @@ export const generateArithmetic = (seedText: string, count = 20): ArithmeticQues
 };
 
 export default function App() {
-  const [state, setState] = useState<WorkspaceState>(() => readStoredState());
+  const workspace = useCloudWorkspace();
+  const state = workspace.state;
+  const setState = workspace.setLocalState;
   const [route, setRoute] = useState<Route>({ view: "home" });
   const [toast, setToast] = useState("");
   const [showVictory, setShowVictory] = useState(false);
   const [parentSession, setParentSession] = useState<{ dateKey: string; pin: string } | null>(null);
   const returnTaskId = useRef<string | null>(null);
   const notificationAttemptedDate = useRef<string | null>(null);
+  const previousCloudBonus = useRef<boolean | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setState((current) => refreshDailyState(current)), 60_000);
+    const id = window.setInterval(() => {
+      if (workspace.enabled) void workspace.refresh();
+      else setState((current) => refreshDailyState(current));
+    }, 60_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [setState, workspace.enabled, workspace.refresh]);
 
   useEffect(() => {
     setParentSession((current) => current?.dateKey === state.dateKey ? current : null);
   }, [state.dateKey]);
+
+  useEffect(() => {
+    if (!workspace.enabled || workspace.mode !== "ready") {
+      previousCloudBonus.current = null;
+      return;
+    }
+    if (previousCloudBonus.current === null) {
+      previousCloudBonus.current = state.bonusAwarded;
+      return;
+    }
+    if (!previousCloudBonus.current && state.bonusAwarded) setShowVictory(true);
+    previousCloudBonus.current = state.bonusAwarded;
+  }, [state.bonusAwarded, workspace.enabled, workspace.mode]);
 
   useEffect(() => {
     if (!route.taskId && returnTaskId.current) {
@@ -138,7 +161,8 @@ export default function App() {
 
   const currentDate = dateFromKey(state.dateKey);
   const requiredTaskIds = getDailyTaskIds(currentDate);
-  const completedRequired = requiredTaskIds.filter((id) => state.completedTaskIds.includes(id)).length;
+  const readyTaskIds = new Set([...state.completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
+  const completedRequired = requiredTaskIds.filter((id) => readyTaskIds.has(id)).length;
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
   const streak = calculateStreak(state.completedDates);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
@@ -146,7 +170,7 @@ export default function App() {
   const dailyReadyNotificationSent = state.notifiedDailyReadyDates.includes(state.dateKey);
 
   useEffect(() => {
-    if (!dailyReadyForNotification || dailyReadyNotificationSent) return;
+    if (workspace.enabled || !dailyReadyForNotification || dailyReadyNotificationSent) return;
 
     let active = true;
     const notify = async () => {
@@ -168,10 +192,16 @@ export default function App() {
       active = false;
       window.removeEventListener("online", notifyWhenOnline);
     };
-  }, [dailyReadyForNotification, dailyReadyNotificationSent, state.dateKey]);
+  }, [dailyReadyForNotification, dailyReadyNotificationSent, state.dateKey, workspace.enabled]);
 
   const markTaskDone = (task: TaskDefinition, outcome: TaskOutcome) => {
-    if (task.completionMode !== "auto") {
+    if (workspace.enabled) {
+      void workspace.submitTask(task, outcome).then((result) => {
+        setToast(result === "queued" ? `${task.shortTitle}已保存在本机，联网后会自动同步。` : task.completionMode === "parent" ? `${task.shortTitle}已提交，等待家长审核。` : `${task.shortTitle}完成，积分已同步。`);
+      }).catch((submitError: unknown) => setToast(submitError instanceof Error ? submitError.message : "任务未能同步，请稍后再试。"));
+      return;
+    }
+    if (task.completionMode === "parent") {
       const nextState = submitTaskReview(state, task, outcome);
       setState(nextState);
       setToast(`${task.shortTitle}已提交，等待家长今天统一审核。`);
@@ -195,6 +225,8 @@ export default function App() {
     setRoute({ view: currentTask.category });
   };
 
+  if (workspace.enabled && workspace.mode !== "ready") return <CloudAccessGate workspace={workspace} />;
+
   return (
     <div className="app-shell">
       <aside className="side-nav" aria-label="学习导航">
@@ -214,17 +246,17 @@ export default function App() {
       </aside>
 
       <main className="main-area">
-        <TopBar points={state.points} progress={progress} completedCount={completedRequired} requiredCount={requiredTaskIds.length} streak={streak} backLabel={currentTask ? `返回${sectionMeta[currentTask.category].label}` : undefined} onBack={currentTask ? returnToSection : undefined} />
+        <TopBar points={state.points} progress={progress} completedCount={completedRequired} requiredCount={requiredTaskIds.length} streak={streak} backLabel={currentTask ? `返回${sectionMeta[currentTask.category].label}` : undefined} onBack={currentTask ? returnToSection : undefined} cloud={workspace} />
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
+          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible={!workspace.enabled || requiredTaskIds.includes(currentTask.id) || optionalTaskIds.includes(currentTask.id)} dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
         ) : route.view === "home" ? (
-          <HomePage state={state} requiredTaskIds={requiredTaskIds} onOpenTask={openTask} />
+          <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
-          <ShopPage state={state} setState={setState} streak={streak} requiredTaskIds={requiredTaskIds} parentSession={parentSession} setParentSession={setParentSession} onVictory={() => setShowVictory(true)} />
+          <ShopPage state={state} setState={setState} streak={streak} requiredTaskIds={requiredTaskIds} parentSession={parentSession} setParentSession={setParentSession} onVictory={() => setShowVictory(true)} cloud={workspace} />
         ) : (
-          <SectionPage view={route.view} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
+          <SectionPage view={route.view} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
         )}
       </main>
 
@@ -242,7 +274,78 @@ export default function App() {
   );
 }
 
-function TopBar({ points, progress, completedCount, requiredCount, streak, backLabel, onBack }: { points: number; progress: number; completedCount: number; requiredCount: number; streak: number; backLabel?: string; onBack?: () => void }) {
+function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController }) {
+  const [accessType, setAccessType] = useState<"parent" | "child">(workspace.mode === "pairing" ? "child" : "parent");
+  const [email, setEmail] = useState("");
+  const [pairCode, setPairCode] = useState("");
+  const [deviceName, setDeviceName] = useState("孩子的设备");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (workspace.mode === "pairing") setAccessType("child");
+  }, [workspace.mode]);
+
+  const submitParent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      await workspace.loginParent(email.trim());
+    } catch (loginError) {
+      setMessage(loginError instanceof Error ? loginError.message : "登录邮件发送失败。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitChild = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      await workspace.pairChild(pairCode, deviceName.trim());
+    } catch (pairError) {
+      setMessage(pairError instanceof Error ? pairError.message : "设备配对失败，请检查配对码。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (workspace.mode === "loading") {
+    return <main className="cloud-access-screen"><div className="cloud-access-panel loading"><img src={characterImages.cinnamoroll} alt="" /><RefreshCw className="spin" size={28} /><h1>正在打开甜心工作台</h1></div></main>;
+  }
+
+  return (
+    <main className="cloud-access-screen">
+      <section className="cloud-access-panel">
+        <div className="cloud-access-brand"><img src={characterImages["hello-kitty"]} alt="" /><div><p className="eyebrow">云端多设备同步</p><h1>甜心工作台</h1></div></div>
+        <div className="access-switch" role="tablist" aria-label="选择进入方式">
+          <button className={accessType === "parent" ? "active" : ""} role="tab" aria-selected={accessType === "parent"} onClick={() => setAccessType("parent")}><Mail size={18} />家长登录</button>
+          <button className={accessType === "child" ? "active" : ""} role="tab" aria-selected={accessType === "child"} onClick={() => setAccessType("child")}><Smartphone size={18} />孩子设备</button>
+        </div>
+
+        {accessType === "parent" ? (
+          <form className="cloud-access-form" onSubmit={submitParent}>
+            <label>家长邮箱<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
+            <button className="primary" disabled={busy || !email.trim()}>{busy ? <RefreshCw className="spin" size={18} /> : <Mail size={18} />}发送登录链接</button>
+          </form>
+        ) : (
+          <form className="cloud-access-form" onSubmit={submitChild}>
+            <label>六位配对码<input inputMode="numeric" maxLength={6} required value={pairCode} onChange={(event) => setPairCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" /></label>
+            <label>设备名称<input maxLength={20} required value={deviceName} onChange={(event) => setDeviceName(event.target.value)} /></label>
+            <button className="primary" disabled={busy || pairCode.length !== 6}>{busy ? <RefreshCw className="spin" size={18} /> : <Smartphone size={18} />}连接家庭工作台</button>
+          </form>
+        )}
+
+        {workspace.authMessage || message || workspace.error ? <p className="cloud-access-message">{workspace.authMessage || message || workspace.error}</p> : null}
+        {workspace.mode === "error" || workspace.mode === "pairing" ? <div className="cloud-access-actions"><button className="secondary" onClick={() => void workspace.refresh()}><RefreshCw size={17} />重新连接</button><button className="secondary" onClick={() => void workspace.signOut()}><LogOut size={17} />清除当前会话</button></div> : null}
+      </section>
+    </main>
+  );
+}
+
+function TopBar({ points, progress, completedCount, requiredCount, streak, backLabel, onBack, cloud }: { points: number; progress: number; completedCount: number; requiredCount: number; streak: number; backLabel?: string; onBack?: () => void; cloud: CloudWorkspaceController }) {
   return (
     <header className="top-bar">
       <div className="top-bar-left">
@@ -257,15 +360,18 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
         <span><CheckCircle2 size={18} />{completedCount}/{requiredCount} 完成</span>
         <span>{progress}% 今日进度</span>
         <span>{streak} 天连续打卡</span>
+        {cloud.enabled ? <span className={`cloud-status ${cloud.syncStatus}`}>{cloud.syncStatus === "offline" ? <CloudOff size={17} /> : cloud.syncStatus === "syncing" ? <RefreshCw className="spin" size={17} /> : <Cloud size={17} />}{cloud.syncStatus === "synced" ? "已同步" : cloud.syncStatus === "syncing" ? "同步中" : cloud.syncStatus === "pending" ? "待同步" : "离线"}</span> : null}
+        {cloud.enabled ? <button className="top-icon-button" title="退出云端账号" aria-label="退出云端账号" onClick={() => void cloud.signOut()}><LogOut size={18} /></button> : null}
       </div>
     </header>
   );
 }
 
-function HomePage({ state, requiredTaskIds, onOpenTask }: { state: WorkspaceState; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void }) {
+function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { state: WorkspaceState; requiredTaskIds: string[]; syncPendingIds: string[]; onOpenTask: (taskId: string) => void }) {
   const dailyTasks = requiredTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const optionalTasks = optionalTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
-  const requiredDone = requiredTaskIds.every((id) => state.completedTaskIds.includes(id));
+  const readyTaskIds = new Set([...state.completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...syncPendingIds]);
+  const requiredDone = requiredTaskIds.every((id) => readyTaskIds.has(id));
   const report = getWeeklyReport(state);
   const weeklyTarget = 250;
   const weeklyProgress = Math.min(100, Math.round((report.earnedPoints / weeklyTarget) * 100));
@@ -288,20 +394,21 @@ function HomePage({ state, requiredTaskIds, onOpenTask }: { state: WorkspaceStat
         <div className="progress-track" aria-label={`本周进度${weeklyProgress}%`}><span style={{ width: `${weeklyProgress}%` }} /></div>
         <p>{report.earnedPoints >= weeklyTarget ? "本周小玩具目标已经达成，周末请家长确认兑换。" : `再获得${weeklyTarget - report.earnedPoints}积分，就达到小玩具周目标。`}</p>
       </article>
-      <TaskGrid tasks={dailyTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
+      <TaskGrid tasks={dailyTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
       <div className="section-title compact-title">
         <Trophy size={34} />
         <div><h2>奖励小游戏</h2><p>{requiredDone ? "今日计划完成，小游戏已解锁。" : "完成今日计划后解锁，不影响全通关。"}</p></div>
       </div>
-      <TaskGrid tasks={optionalTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={!requiredDone} />
+      <TaskGrid tasks={optionalTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={!requiredDone} />
     </section>
   );
 }
 
-function SectionPage({ view, completedIds, pendingIds, requiredTaskIds, dateKey, onOpenTask }: { view: TaskCategory; completedIds: string[]; pendingIds: string[]; requiredTaskIds: string[]; dateKey: string; onOpenTask: (taskId: string) => void }) {
+function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredTaskIds, dateKey, onOpenTask }: { view: TaskCategory; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; dateKey: string; onOpenTask: (taskId: string) => void }) {
   const tasks = taskCatalog.filter((task) => task.category === view);
   const meta = sectionMeta[view];
-  const gamesLocked = view === "game" && !requiredTaskIds.every((id) => completedIds.includes(id));
+  const readyTaskIds = new Set([...completedIds, ...pendingIds, ...syncPendingIds]);
+  const gamesLocked = view === "game" && !requiredTaskIds.every((id) => readyTaskIds.has(id));
   return (
     <section>
       <div className="section-title">
@@ -309,7 +416,7 @@ function SectionPage({ view, completedIds, pendingIds, requiredTaskIds, dateKey,
         <div><p className="eyebrow">{curriculumNote}</p><h2>{meta.label}</h2></div>
       </div>
       {view === "chinese" || view === "math" || view === "english" ? <SubjectDashboard view={view} dateKey={dateKey} tasks={tasks} completedIds={completedIds} /> : null}
-      <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={gamesLocked} />
+      <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={gamesLocked} />
     </section>
   );
 }
@@ -334,23 +441,24 @@ function SubjectDashboard({ view, dateKey, tasks, completedIds }: { view: "chine
   );
 }
 
-function TaskGrid({ tasks, completedIds, pendingIds, requiredTaskIds, onOpenTask, locked = false }: { tasks: TaskDefinition[]; completedIds: string[]; pendingIds: string[]; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void; locked?: boolean }) {
+function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTaskIds, onOpenTask, locked = false }: { tasks: TaskDefinition[]; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void; locked?: boolean }) {
   return (
     <div className="task-grid">
       {tasks.map((task) => {
         const completed = completedIds.includes(task.id);
         const pending = pendingIds.includes(task.id);
+        const syncPending = syncPendingIds.includes(task.id);
         const required = requiredTaskIds.includes(task.id);
         return (
-          <article className={completed ? "task-card completed" : pending ? "task-card pending" : "task-card"} key={task.id} data-task-id={task.id}>
+          <article className={completed ? "task-card completed" : pending || syncPending ? "task-card pending" : "task-card"} key={task.id} data-task-id={task.id}>
             <img src={characterImages[task.character]} alt="" />
             <div>
-              <p className="task-meta">{pending ? "待家长审核" : required ? "今日必做" : task.schedule === "optional" ? "奖励任务" : "本周轮换"} · {task.minutes} · +{task.points}</p>
+              <p className="task-meta">{syncPending ? "待同步" : pending ? "待家长审核" : required ? "今日必做" : task.schedule === "optional" ? "奖励任务" : "本周轮换"} · {task.minutes} · +{task.points}</p>
               <h3>{task.title}</h3>
               <p>{task.summary}</p>
             </div>
             <div className="card-actions">
-              <button className="secondary" disabled={locked} onClick={() => onOpenTask(task.id)}>{locked ? <LockKeyhole size={16} /> : pending ? <Clock3 size={16} /> : <Play size={16} />}{locked ? "完成计划后解锁" : pending ? "查看提交" : completed ? "查看练习" : "开始挑战"}</button>
+              <button className="secondary" disabled={locked || syncPending} onClick={() => onOpenTask(task.id)}>{locked ? <LockKeyhole size={16} /> : pending || syncPending ? <Clock3 size={16} /> : <Play size={16} />}{locked ? "完成计划后解锁" : syncPending ? "等待同步" : pending ? "查看提交" : completed ? "查看练习" : "开始挑战"}</button>
             </div>
           </article>
         );
@@ -359,7 +467,7 @@ function TaskGrid({ tasks, completedIds, pendingIds, requiredTaskIds, onOpenTask
   );
 }
 
-function TaskPage({ task, completed, pending, dateKey, onDone }: { task: TaskDefinition; completed: boolean; pending: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
+function TaskPage({ task, completed, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
   const [outcome, setOutcome] = useState<TaskOutcome>(completed ? { ...emptyOutcome, ready: true } : emptyOutcome);
   const startedAt = useRef(Date.now());
   useEffect(() => {
@@ -367,7 +475,7 @@ function TaskPage({ task, completed, pending, dateKey, onDone }: { task: TaskDef
     startedAt.current = Date.now();
   }, [task.id, completed]);
 
-  const canComplete = outcome.ready && !completed && !pending;
+  const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
 
   return (
     <section>
@@ -381,12 +489,12 @@ function TaskPage({ task, completed, pending, dateKey, onDone }: { task: TaskDef
       </div>
       <TaskContent task={task} dateKey={dateKey} onProgress={setOutcome} />
       <div className="finish-bar">
-        <p className={outcome.ready ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : outcome.message ?? completionHint(task)}</p>
+        <p className={outcome.ready && eligible ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : syncPending ? "任务已保存在本机，联网后同步并结算正式积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : !eligible ? "今天可以自由练习，这项不计入今日积分。" : outcome.message ?? completionHint(task)}</p>
         <button className="primary big" disabled={!canComplete} onClick={() => onDone({
           ...outcome,
           durationSeconds: Math.max(outcome.durationSeconds ?? 0, Math.round((Date.now() - startedAt.current) / 1000)),
         })}>
-          <CheckCircle2 size={20} />{completed ? "今天已完成" : pending ? "等待家长审核" : task.completionMode === "auto" ? `完成任务 +${task.points}` : "提交家长审核"}
+          <CheckCircle2 size={20} />{completed ? "今天已完成" : syncPending ? "等待同步" : pending ? "等待家长审核" : !eligible ? "今日自由练习" : task.completionMode === "parent" ? "提交家长审核" : `完成任务 +${task.points}`}
         </button>
       </div>
     </section>
@@ -394,7 +502,7 @@ function TaskPage({ task, completed, pending, dateKey, onDone }: { task: TaskDef
 }
 
 function completionHint(task: TaskDefinition) {
-  if (task.completionMode === "timer") return `有效练习达到${Math.round((task.minimumDuration ?? 0) / 60)}分钟后可提交家长审核。`;
+  if (task.completionMode === "timer") return `有效练习达到${Math.round((task.minimumDuration ?? 0) / 60)}分钟后自动完成并发放积分。`;
   if (task.completionMode === "parent") return "先完成练习要求，再提交到今日家长审核。";
   return `正确率达到${task.minimumScore ?? 80}%后解锁积分。`;
 }
@@ -455,7 +563,7 @@ function usePracticeTimer(minimumDuration: number, onProgress: (outcome: TaskOut
   }, [running, elapsed, minimumDuration]);
   useEffect(() => {
     const ready = elapsed >= minimumDuration;
-    onProgress({ ready, durationSeconds: elapsed, attempts: 1, wrongQuestions: [], evidence: `有效计时${Math.floor(elapsed / 60)}分${elapsed % 60}秒`, message: ready ? "有效练习时间已达标，可以提交家长审核。" : undefined });
+    onProgress({ ready, durationSeconds: elapsed, attempts: 1, wrongQuestions: [], evidence: `有效计时${Math.floor(elapsed / 60)}分${elapsed % 60}秒`, message: ready ? "有效练习时间已达标，可以完成任务。" : undefined });
     if (ready) setRunning(false);
   }, [elapsed, minimumDuration, onProgress]);
   return { elapsed, running, setRunning };
@@ -811,14 +919,16 @@ function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcom
   return <div className="panel"><h3>{config.title}</h3><p>运动前先热身，完成后提交到今日家长审核。动作不舒服时应立即停止。</p><label>完成数量或时长（{config.unit}）<input className="wide-input" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value.replace(/\D/g, ""))} placeholder={`目标${config.target}${config.unit}`} /></label></div>;
 }
 
-function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, setParentSession, onVictory }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; streak: number; requiredTaskIds: string[]; parentSession: { dateKey: string; pin: string } | null; setParentSession: (session: { dateKey: string; pin: string } | null) => void; onVictory: () => void }) {
+function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, setParentSession, onVictory, cloud }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; streak: number; requiredTaskIds: string[]; parentSession: { dateKey: string; pin: string } | null; setParentSession: (session: { dateKey: string; pin: string } | null) => void; onVictory: () => void; cloud: CloudWorkspaceController }) {
   const [shopTab, setShopTab] = useState<"rewards" | "records" | "parent">("rewards");
   const [pin, setPin] = useState("");
   const [adjustment, setAdjustment] = useState("");
   const [message, setMessage] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(state.dateKey.slice(0, 7));
   const [reportPeriod, setReportPeriod] = useState<"day" | "week" | "month">("day");
-  const parentUnlocked = parentSession?.dateKey === state.dateKey;
+  const [generatedPairCode, setGeneratedPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const cloudParent = cloud.enabled && cloud.role === "parent";
+  const parentUnlocked = cloud.enabled ? cloudParent : parentSession?.dateKey === state.dateKey;
   const parentPin = parentSession?.pin ?? pin;
   const reportDate = dateFromKey(state.dateKey);
   const reports = {
@@ -839,17 +949,36 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     setCalendarMonth(`${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`);
   };
 
-  const applyReward = (reward: (typeof shopRewards)[number]) => {
+  const applyReward = async (reward: (typeof shopRewards)[number]) => {
+    if (cloud.enabled) {
+      try {
+        await cloud.requestReward(reward.id);
+        setMessage("兑换申请已同步，请家长确认。 ");
+      } catch (rewardError) {
+        setMessage(rewardError instanceof Error ? rewardError.message : "兑换申请失败。");
+      }
+      return;
+    }
     const next = requestReward(state, { id: reward.id, name: reward.name, cost: reward.costStars });
     if (!next) setMessage(weekend ? "积分不足，或已经有同类申请等待处理。" : "周六、周日开放集中兑换。");
     else { setState(next); setMessage("兑换申请已提交，请家长确认。 "); }
   };
-  const approve = (requestId: string) => {
+  const approve = async (requestId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.approveReward(requestId); setMessage("兑换已经批准，积分已同步扣除。 "); }
+      catch (approvalError) { setMessage(approvalError instanceof Error ? approvalError.message : "兑换审批失败。"); }
+      return;
+    }
     const next = approveReward(state, requestId, parentPin);
     if (!next) setMessage("家长口令不正确，或当前积分不足。");
     else { setState(next); setMessage("家长已批准，积分已扣除。 "); }
   };
-  const fulfill = (requestId: string) => {
+  const fulfill = async (requestId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.fulfillReward(requestId); setMessage("奖励已经兑现并同步记录。 "); }
+      catch (fulfillError) { setMessage(fulfillError instanceof Error ? fulfillError.message : "兑现记录失败。"); }
+      return;
+    }
     const next = fulfillReward(state, requestId, parentPin);
     if (!next) setMessage("请输入正确的家长口令。");
     else { setState(next); setMessage("奖励已经兑现并记录。 "); }
@@ -862,7 +991,12 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     setParentSession({ dateKey: state.dateKey, pin });
     setMessage("家长中心已解锁。");
   };
-  const approveLearning = (reviewId: string) => {
+  const approveLearning = async (reviewId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.reviewTask(reviewId, "approve"); setMessage("学习打卡已批准，积分已经同步。 "); }
+      catch (reviewError) { setMessage(reviewError instanceof Error ? reviewError.message : "学习审核失败。"); }
+      return;
+    }
     const next = approveTaskReview(state, reviewId, requiredTaskIds, parentPin);
     if (!next) setMessage("审核失败，请重新验证家长口令。");
     else {
@@ -872,7 +1006,12 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       if (!state.bonusAwarded && next.bonusAwarded) onVictory();
     }
   };
-  const approveAllLearning = () => {
+  const approveAllLearning = async () => {
+    if (cloud.enabled) {
+      try { await cloud.reviewAll(); setMessage("今日待审任务已全部批准，积分已经同步。 "); }
+      catch (reviewError) { setMessage(reviewError instanceof Error ? reviewError.message : "批量审核失败。"); }
+      return;
+    }
     const next = approveAllTaskReviews(state, requiredTaskIds, parentPin);
     if (!next) setMessage("批量审核失败，请重新验证家长口令。");
     else {
@@ -883,19 +1022,52 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       if (!state.bonusAwarded && next.bonusAwarded) onVictory();
     }
   };
-  const rejectLearning = (reviewId: string) => {
+  const rejectLearning = async (reviewId: string) => {
+    if (cloud.enabled) {
+      try { await cloud.reviewTask(reviewId, "reject"); setMessage("任务已退回，孩子可以重新完成。 "); }
+      catch (reviewError) { setMessage(reviewError instanceof Error ? reviewError.message : "退回任务失败。"); }
+      return;
+    }
     const next = rejectTaskReview(state, reviewId, parentPin);
     if (!next) setMessage("退回失败，请重新验证家长口令。");
     else { setState(next); setMessage("已退回任务，孩子可以重新完成后再提交。 "); }
   };
-  const applyAdjustment = () => {
+  const applyAdjustment = async () => {
+    if (cloud.enabled) {
+      try { await cloud.adjustPoints(Number(adjustment)); setAdjustment(""); setMessage("积分调整已同步。 "); }
+      catch (adjustmentError) { setMessage(adjustmentError instanceof Error ? adjustmentError.message : "积分调整失败。"); }
+      return;
+    }
     const next = adjustPoints(state, Number(adjustment), parentPin);
     if (!next) setMessage("请输入正确口令和非零整数积分。");
     else { setState(next); setAdjustment(""); setMessage("积分调整完成。 "); }
   };
   const lockParent = () => {
+    if (cloud.enabled) {
+      setShopTab("rewards");
+      return;
+    }
     setParentSession(null);
     setPin("");
+  };
+
+  const generatePairCode = async () => {
+    try {
+      const code = await cloud.createPairCode();
+      setGeneratedPairCode(code);
+      setMessage("新的设备配对码已生成，十分钟内有效。 ");
+    } catch (pairError) {
+      setMessage(pairError instanceof Error ? pairError.message : "配对码生成失败。");
+    }
+  };
+
+  const revokeDevice = async (userId: string) => {
+    try {
+      await cloud.revokeDevice(userId);
+      setMessage("孩子设备已移除。 ");
+    } catch (deviceError) {
+      setMessage(deviceError instanceof Error ? deviceError.message : "设备移除失败。");
+    }
   };
 
   return (
@@ -913,7 +1085,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       <div className="shop-tabs" role="tablist" aria-label="积分商店页面">
         <button className={shopTab === "rewards" ? "active" : ""} role="tab" aria-selected={shopTab === "rewards"} onClick={() => setShopTab("rewards")}>奖励货架</button>
         <button className={shopTab === "records" ? "active" : ""} role="tab" aria-selected={shopTab === "records"} onClick={() => setShopTab("records")}>兑换记录</button>
-        <button className={shopTab === "parent" ? "active" : ""} role="tab" aria-selected={shopTab === "parent"} onClick={() => setShopTab("parent")}>家长中心</button>
+        {!cloud.enabled || cloudParent ? <button className={shopTab === "parent" ? "active" : ""} role="tab" aria-selected={shopTab === "parent"} onClick={() => setShopTab("parent")}>家长中心</button> : null}
       </div>
 
       {message ? <p className="shop-message">{message}</p> : null}
@@ -950,7 +1122,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
         <div className="parent-center">
           {!parentUnlocked ? <section className="parent-gate"><LockKeyhole size={30} /><div><h3>家长验证</h3><p>请输入今日四位家长口令，验证后即可审核学习、处理兑换和调整积分。</p><div className="parent-unlock-row"><input className="pin-input" aria-label="家长口令" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="今日四位口令" /><button className="primary" disabled={pin.length !== 4} onClick={unlockParent}>进入家长中心</button></div></div></section> : <>
             <section className="parent-section learning-review-section">
-              <div className="parent-section-head"><div><p className="eyebrow">批准后才会发放对应积分</p><h3>今日学习审核 · {state.pendingTaskReviews.length}项待审</h3></div><div className="inline-actions"><button className="primary" disabled={!state.pendingTaskReviews.length} onClick={approveAllLearning}>一键批准全部</button><button className="secondary" onClick={lockParent}>退出家长中心</button></div></div>
+              <div className="parent-section-head"><div><p className="eyebrow">批准后才会发放对应积分</p><h3>今日学习审核 · {state.pendingTaskReviews.length}项待审</h3></div><div className="inline-actions"><button className="primary" disabled={!state.pendingTaskReviews.length} onClick={() => void approveAllLearning()}>一键批准全部</button><button className="secondary" onClick={lockParent}>{cloud.enabled ? "返回奖励货架" : "退出家长中心"}</button></div></div>
               <div className="learning-review-list">{state.pendingTaskReviews.length ? state.pendingTaskReviews.map((review) => <div className="learning-review-row" key={review.id}><div><strong>{review.taskTitle}</strong><p>{formatTaskReviewEvidence(review)} · 提交于{new Date(review.submittedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</p><span>批准后 +{review.points}积分</span></div><div className="review-actions"><button className="secondary" onClick={() => rejectLearning(review.id)}>退回重做</button><button className="primary" onClick={() => approveLearning(review.id)}>批准 +{review.points}</button></div></div>) : <div className="empty-record"><img src={characterImages.cinnamoroll} alt="" /><p>今天没有待审核任务。自动判分题达标后会直接发积分。</p></div>}</div>
             </section>
             <section className="parent-section"><h3>兑换审批</h3><div className="request-list">{state.rewardRequests.filter((request) => request.status !== "fulfilled").length ? state.rewardRequests.filter((request) => request.status !== "fulfilled").map((request) => <div className="request-row" key={request.id}><span><strong>{request.rewardName}</strong> · {request.cost}积分 · {request.status === "pending" ? "待批准" : "待兑现"}</span>{request.status === "pending" ? <button className="primary" onClick={() => approve(request.id)}>批准兑换</button> : <button className="secondary" onClick={() => fulfill(request.id)}>确认已兑现</button>}</div>) : <p className="muted">暂无待处理申请。</p>}</div></section>
@@ -958,6 +1130,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
               <section className="parent-section learning-report"><div className="report-heading"><h3><BarChart3 size={20} /> 学习报告总结</h3><div className="report-switch" role="tablist" aria-label="学习报告周期"><button className={reportPeriod === "day" ? "active" : ""} role="tab" aria-selected={reportPeriod === "day"} onClick={() => setReportPeriod("day")}>本日</button><button className={reportPeriod === "week" ? "active" : ""} role="tab" aria-selected={reportPeriod === "week"} onClick={() => setReportPeriod("week")}>本周</button><button className={reportPeriod === "month" ? "active" : ""} role="tab" aria-selected={reportPeriod === "month"} onClick={() => setReportPeriod("month")}>本月</button></div></div><div className="report-metrics"><div><span>完成任务</span><strong>{report.taskCount}项</strong></div><div><span>完整打卡</span><strong>{report.completedDays}天</strong></div><div><span>有效时长</span><strong>{Math.round(report.totalDurationSeconds / 60)}分钟</strong></div><div><span>口算正确率</span><strong>{report.arithmeticAverage ? `${report.arithmeticAverage}%` : "暂无"}</strong></div><div><span>获得积分</span><strong>{report.earnedPoints}</strong></div></div><p className="report-summary">{getLearningReportSummary(reportPeriod, report)}</p><p className="report-wrong">主要错题：{report.wrongQuestions.length ? report.wrongQuestions.slice(0, 5).join("、") : "暂无记录"}</p></section>
               <section className="parent-section"><h3>调整积分</h3><p>用于家长补发奖励或修正记录，负数会扣减但不会低于0。</p><input value={adjustment} onChange={(event) => setAdjustment(event.target.value.replace(/[^\d-]/g, ""))} placeholder="例如 10 或 -5" /><button className="secondary" onClick={applyAdjustment}>确认调整</button></section>
             </div>
+            {cloud.enabled && cloudParent ? <section className="parent-section device-management"><div className="parent-section-head"><div><p className="eyebrow">孩子设备只可学习和提交</p><h3><Smartphone size={20} /> 设备管理</h3></div><button className="primary" onClick={() => void generatePairCode()}>生成配对码</button></div>{generatedPairCode ? <div className="pair-code-result"><strong>{generatedPairCode.code}</strong><span>十分钟内有效</span></div> : null}<div className="device-list">{cloud.devices.length ? cloud.devices.map((device) => <div className="device-row" key={device.userId}><div><strong>{device.name}</strong><span>{new Date(device.createdAt).toLocaleDateString("zh-CN")}</span></div><button className="secondary" onClick={() => void revokeDevice(device.userId)}>移除</button></div>) : <p className="muted">还没有配对孩子设备。</p>}</div></section> : null}
           </>}
         </div>
       ) : null}

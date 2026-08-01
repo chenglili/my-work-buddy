@@ -1,0 +1,418 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import type { TaskDefinition } from "../appData";
+import {
+  initialWorkspaceState,
+  normalizeWorkspaceState,
+  readStoredState,
+  STORAGE_KEY,
+  type CompletionResultInput,
+  type WorkspaceState,
+} from "../state/workspace";
+import { cloudBackendEnabled, supabase } from "./supabase";
+import { clearCloudUserData, enqueueTaskCommand, readCloudSnapshot, readTaskOutbox, removeTaskCommand, saveCloudSnapshot } from "./offlineStore";
+import type { CloudMode, CloudWorkspaceController, CloudWorkspacePayload, QueuedTaskCommand, SyncStatus } from "./types";
+
+const LEGACY_BACKUP_KEY = "my-work-buddy-state-v2-cloud-backup";
+
+const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
+const commandId = () => crypto.randomUUID();
+
+const cleanResult = (result: CompletionResultInput): CompletionResultInput => ({
+  score: result.score,
+  durationSeconds: result.durationSeconds ?? 0,
+  attempts: result.attempts ?? 1,
+  wrongQuestions: result.wrongQuestions ?? [],
+  evidence: result.evidence,
+});
+
+const hashText = async (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "云端操作失败，请稍后再试。";
+const isNetworkFailure = (error: unknown) => !navigator.onLine || /fetch|network|offline/i.test(errorMessage(error));
+const isMembershipFailure = (error: unknown) => /family membership required/i.test(errorMessage(error));
+
+const normalizePayload = (value: unknown): CloudWorkspacePayload => {
+  if (!value || typeof value !== "object") throw new Error("云端返回的数据格式不正确。");
+  const payload = value as CloudWorkspacePayload;
+  if (!payload.state || !payload.role || !payload.childId) throw new Error("云端工作台数据不完整。");
+  return {
+    ...payload,
+    state: normalizeWorkspaceState(payload.state, dateFromKey(payload.state.dateKey)),
+    devices: payload.devices ?? [],
+  };
+};
+
+export const useCloudWorkspace = (): CloudWorkspaceController => {
+  const [state, setState] = useState<WorkspaceState>(() => readStoredState());
+  const [mode, setMode] = useState<CloudMode>(cloudBackendEnabled ? "loading" : "local");
+  const [payload, setPayload] = useState<CloudWorkspacePayload | null>(null);
+  const [pendingTaskIds, setPendingTaskIds] = useState<string[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(cloudBackendEnabled ? "syncing" : "local");
+  const [error, setError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const sessionRef = useRef<Session | null>(null);
+  const flushingRef = useRef(false);
+  const realtimeRefreshTimer = useRef<number | null>(null);
+
+  const refreshPendingTaskIds = useCallback(async (userId: string) => {
+    const commands = await readTaskOutbox(userId);
+    setPendingTaskIds(Array.from(new Set(commands.map((command) => command.taskId))));
+    return commands;
+  }, []);
+
+  const applyPayload = useCallback(async (userId: string, raw: unknown) => {
+    const next = normalizePayload(raw);
+    setPayload(next);
+    setState(next.state);
+    setMode("ready");
+    setError("");
+    setSyncStatus(navigator.onLine ? "synced" : "offline");
+    await saveCloudSnapshot(userId, next);
+  }, []);
+
+  const invokeNotification = useCallback(async () => {
+    if (!supabase || !navigator.onLine) return;
+    await supabase.functions.invoke("daily-ready", { method: "POST", body: {} }).catch(() => undefined);
+  }, []);
+
+  const fetchWorkspace = useCallback(async (userId: string) => {
+    if (!supabase) return;
+    const { data, error: rpcError } = await supabase.rpc("get_workspace");
+    if (rpcError) throw rpcError;
+    await applyPayload(userId, data);
+  }, [applyPayload]);
+
+  const resetChildPairing = useCallback(async (userId: string, wasPaired: boolean) => {
+    await clearCloudUserData(userId).catch(() => undefined);
+    setPendingTaskIds([]);
+    setPayload(null);
+    setState(initialWorkspaceState());
+    setMode("pairing");
+    setSyncStatus("offline");
+    setError(wasPaired ? "这台设备的家庭连接已被移除，请使用新的配对码重新连接。" : "");
+  }, []);
+
+  const refreshFromCloud = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!supabase || !session || !navigator.onLine) return false;
+    setSyncStatus("syncing");
+    try {
+      await fetchWorkspace(session.user.id);
+      return true;
+    } catch (refreshError) {
+      if (session.user.is_anonymous && isMembershipFailure(refreshError)) {
+        await resetChildPairing(session.user.id, true);
+        return false;
+      }
+      setSyncStatus("offline");
+      setError(`暂时无法同步云端数据：${errorMessage(refreshError)}`);
+      return false;
+    }
+  }, [fetchWorkspace, resetChildPairing]);
+
+  const migrateLegacy = useCallback(async (userId: string, currentPayload: CloudWorkspacePayload) => {
+    if (!supabase || currentPayload.legacyImported) return currentPayload;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const legacyState = stored ? JSON.parse(stored) as WorkspaceState : readStoredState();
+    const serialized = JSON.stringify(legacyState);
+    localStorage.setItem(LEGACY_BACKUP_KEY, serialized);
+    const { data, error: migrationError } = await supabase.rpc("import_legacy_workspace", {
+      p_command_id: commandId(),
+      p_legacy: legacyState,
+      p_import_hash: await hashText(serialized),
+    });
+    if (migrationError) throw migrationError;
+    const migrated = normalizePayload(data);
+    await applyPayload(userId, migrated);
+    return migrated;
+  }, [applyPayload]);
+
+  const initializeSession = useCallback(async (session: Session) => {
+    if (!supabase) return;
+    sessionRef.current = session;
+    setUserEmail(session.user.email ?? "孩子设备");
+    setMode("loading");
+    setSyncStatus(navigator.onLine ? "syncing" : "offline");
+    const cached = await readCloudSnapshot(session.user.id).catch(() => undefined);
+    const queued = await refreshPendingTaskIds(session.user.id).catch(() => []);
+    if (cached) {
+      setPayload(cached);
+      setState(cached.state);
+    }
+
+    try {
+      if (!session.user.is_anonymous) {
+        const { error: familyError } = await supabase.rpc("ensure_parent_family", { p_name: "甜心家庭" });
+        if (familyError) throw familyError;
+      }
+      const { data, error: workspaceError } = await supabase.rpc("get_workspace");
+      if (workspaceError) {
+        if (session.user.is_anonymous && isMembershipFailure(workspaceError)) {
+          await resetChildPairing(session.user.id, Boolean(cached));
+          return;
+        }
+        throw workspaceError;
+      }
+      let next = normalizePayload(data);
+      await applyPayload(session.user.id, next);
+      if (queued.length) setSyncStatus(navigator.onLine ? "syncing" : "pending");
+      if (!session.user.is_anonymous && !next.legacyImported) next = await migrateLegacy(session.user.id, next);
+      await invokeNotification();
+    } catch (sessionError) {
+      if (cached) {
+        setMode("ready");
+        setSyncStatus("offline");
+        setError("当前无法连接云端，正在使用上次同步的数据。");
+      } else {
+        setMode("error");
+        setError(errorMessage(sessionError));
+      }
+    }
+  }, [applyPayload, invokeNotification, migrateLegacy, refreshPendingTaskIds, resetChildPairing]);
+
+  const syncQueuedCommand = useCallback(async (command: QueuedTaskCommand) => {
+    if (!supabase) return;
+    const { data, error: rpcError } = await supabase.rpc("submit_task", {
+      p_command_id: command.commandId,
+      p_date_key: command.dateKey,
+      p_task_id: command.taskId,
+      p_result: command.result,
+    });
+    if (rpcError) throw rpcError;
+    await removeTaskCommand(command.commandId);
+    await refreshPendingTaskIds(command.userId);
+    await applyPayload(command.userId, data);
+  }, [applyPayload, refreshPendingTaskIds]);
+
+  const flushOutbox = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session || !supabase || !navigator.onLine || flushingRef.current) return;
+    flushingRef.current = true;
+    setSyncStatus("syncing");
+    try {
+      const commands = await readTaskOutbox(session.user.id);
+      for (const queued of commands) {
+        try {
+          await syncQueuedCommand(queued);
+        } catch (syncError) {
+          if (isNetworkFailure(syncError)) {
+            setSyncStatus("offline");
+            return;
+          }
+          if (session.user.is_anonymous && isMembershipFailure(syncError)) {
+            await resetChildPairing(session.user.id, true);
+            return;
+          }
+          await removeTaskCommand(queued.commandId);
+          await refreshPendingTaskIds(session.user.id);
+          setError(`一项离线记录未能同步：${errorMessage(syncError)}`);
+        }
+      }
+      if (await refreshFromCloud()) await invokeNotification();
+    } catch (flushError) {
+      setSyncStatus("offline");
+      setError(`暂时无法同步离线记录：${errorMessage(flushError)}`);
+    } finally {
+      flushingRef.current = false;
+    }
+  }, [invokeNotification, refreshFromCloud, resetChildPairing, syncQueuedCommand]);
+
+  useEffect(() => {
+    if (!cloudBackendEnabled || !supabase) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return;
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!cloudBackendEnabled || !supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) void initializeSession(data.session);
+      else setMode("signed-out");
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      sessionRef.current = session;
+      if (session && (event === "SIGNED_IN" || event === "USER_UPDATED")) void initializeSession(session);
+      else {
+        if (session) return;
+        setPayload(null);
+        setPendingTaskIds([]);
+        setMode("signed-out");
+        setSyncStatus("offline");
+      }
+    });
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [initializeSession]);
+
+  useEffect(() => {
+    if (!cloudBackendEnabled || !supabase || mode !== "ready") return;
+    const client = supabase;
+    const refreshSoon = () => {
+      if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = window.setTimeout(() => {
+        void refreshFromCloud();
+      }, 250);
+    };
+    const channel = client.channel("workspace-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_records" }, refreshSoon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "point_ledger" }, refreshSoon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reward_requests" }, refreshSoon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, refreshSoon)
+      .subscribe();
+    const online = () => void flushOutbox();
+    const offline = () => setSyncStatus("offline");
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    void flushOutbox();
+    return () => {
+      if (realtimeRefreshTimer.current) window.clearTimeout(realtimeRefreshTimer.current);
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+      void client.removeChannel(channel);
+    };
+  }, [flushOutbox, mode, refreshFromCloud]);
+
+  const loginParent = useCallback(async (email: string) => {
+    if (!supabase) return;
+    setAuthMessage("");
+    if (sessionRef.current?.user.is_anonymous) await supabase.auth.signOut();
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error: signInError } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+    if (signInError) throw signInError;
+    setAuthMessage("登录邮件已发送，请在邮箱中打开链接。 ");
+  }, []);
+
+  const pairChild = useCallback(async (code: string, deviceName: string) => {
+    if (!supabase) return;
+    let session = sessionRef.current;
+    if (!session?.user.is_anonymous) {
+      if (session) await supabase.auth.signOut();
+      const { data, error: anonymousError } = await supabase.auth.signInAnonymously();
+      if (anonymousError || !data.session) throw anonymousError ?? new Error("无法创建设备会话。");
+      session = data.session;
+      sessionRef.current = session;
+    }
+    const { error: pairError } = await supabase.rpc("claim_pair_code", { p_command_id: commandId(), p_code: code, p_device_name: deviceName || "孩子设备" });
+    if (pairError) throw pairError;
+    await initializeSession(session);
+  }, [initializeSession]);
+
+  const signOut = useCallback(async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    sessionRef.current = null;
+    setPayload(null);
+    setPendingTaskIds([]);
+    setMode("signed-out");
+    setState(initialWorkspaceState());
+  }, []);
+
+  const refresh = useCallback(async () => {
+    await refreshFromCloud();
+  }, [refreshFromCloud]);
+
+  const submitTask = useCallback(async (task: TaskDefinition, result: CompletionResultInput) => {
+    if (!cloudBackendEnabled || !supabase) throw new Error("云端未启用。");
+    const session = sessionRef.current;
+    if (!session) throw new Error("请先登录或配对设备。");
+    const clean = cleanResult(result);
+    if (!payload) throw new Error("云端工作台尚未准备完成。");
+    const existing = (await readTaskOutbox(session.user.id)).find((command) => command.dateKey === state.dateKey && command.taskId === task.id);
+    if (existing) {
+      setPendingTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
+      setSyncStatus(navigator.onLine ? "syncing" : "pending");
+      if (navigator.onLine) void flushOutbox();
+      return "queued";
+    }
+    const queued: QueuedTaskCommand = { commandId: commandId(), userId: session.user.id, type: "submit_task", dateKey: state.dateKey, taskId: task.id, result: clean, createdAt: new Date().toISOString() };
+    await enqueueTaskCommand(queued);
+    setPendingTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
+    if (!navigator.onLine) {
+      setSyncStatus("pending");
+      return "queued";
+    }
+    setSyncStatus("syncing");
+    try {
+      await syncQueuedCommand(queued);
+      await invokeNotification();
+      setSyncStatus("synced");
+      return "synced";
+    } catch (submitError) {
+      if (isNetworkFailure(submitError)) {
+        setSyncStatus("pending");
+        return "queued";
+      }
+      await removeTaskCommand(queued.commandId);
+      await refreshPendingTaskIds(session.user.id);
+      await refreshFromCloud();
+      throw submitError;
+    }
+  }, [flushOutbox, invokeNotification, payload, refreshFromCloud, refreshPendingTaskIds, state.dateKey, syncQueuedCommand]);
+
+  const runMutation = useCallback(async (name: string, args: Record<string, unknown>) => {
+    const session = sessionRef.current;
+    if (!supabase || !session) throw new Error("请先登录家长账号。");
+    if (!navigator.onLine) throw new Error("家长操作需要联网后进行。");
+    setSyncStatus("syncing");
+    const { data, error: rpcError } = await supabase.rpc(name, { p_command_id: commandId(), ...args });
+    if (rpcError) {
+      setSyncStatus("synced");
+      throw rpcError;
+    }
+    await applyPayload(session.user.id, data);
+    await invokeNotification();
+  }, [applyPayload, invokeNotification]);
+
+  const createPairCode = useCallback(async () => {
+    if (!supabase || payload?.role !== "parent" || !navigator.onLine) throw new Error("请使用联网的家长设备操作。");
+    const { data, error: rpcError } = await supabase.rpc("create_pair_code", { p_command_id: commandId(), p_device_name: "孩子设备" });
+    if (rpcError) throw rpcError;
+    return data as { code: string; expiresAt: string };
+  }, [payload?.role]);
+
+  const revokeDevice = useCallback(async (userId: string) => {
+    if (!supabase || payload?.role !== "parent" || !navigator.onLine) throw new Error("请使用联网的家长设备操作。");
+    const { error: rpcError } = await supabase.rpc("revoke_child_device", { p_command_id: commandId(), p_user_id: userId });
+    if (rpcError) throw rpcError;
+    await refresh();
+  }, [payload?.role, refresh]);
+
+  return {
+    enabled: cloudBackendEnabled,
+    mode,
+    state,
+    role: payload?.role ?? null,
+    devices: payload?.devices ?? [],
+    pendingTaskIds,
+    syncStatus,
+    error,
+    authMessage,
+    userEmail,
+    setLocalState: setState,
+    loginParent,
+    pairChild,
+    signOut,
+    refresh,
+    submitTask,
+    reviewTask: (reviewId, action) => runMutation("review_task", { p_review_id: reviewId, p_action: action }),
+    reviewAll: () => runMutation("review_all", {}),
+    requestReward: (rewardId) => runMutation("request_reward", { p_reward_id: rewardId }),
+    approveReward: (requestId) => runMutation("approve_reward", { p_request_id: requestId }),
+    fulfillReward: (requestId) => runMutation("fulfill_reward", { p_request_id: requestId }),
+    adjustPoints: (amount) => runMutation("adjust_points", { p_amount: amount }),
+    createPairCode,
+    revokeDevice,
+  };
+};

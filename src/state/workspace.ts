@@ -388,7 +388,7 @@ export const migrateLegacyState = (legacy: LegacyWorkspaceState, today = new Dat
   }, today);
 };
 
-const normalizeState = (parsed: Partial<WorkspaceState>, today: Date): WorkspaceState => {
+export const normalizeWorkspaceState = (parsed: Partial<WorkspaceState>, today: Date): WorkspaceState => {
   const initial = initialWorkspaceState(today);
   return refreshDailyState({
     dateKey: parsed.dateKey ?? initial.dateKey,
@@ -409,7 +409,7 @@ export const readStoredState = (today = new Date()): WorkspaceState => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      return normalizeState(JSON.parse(saved) as Partial<WorkspaceState>, today);
+      return normalizeWorkspaceState(JSON.parse(saved) as Partial<WorkspaceState>, today);
     } catch {
       return initialWorkspaceState(today);
     }

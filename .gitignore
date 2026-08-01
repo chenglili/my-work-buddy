@@ -8,3 +8,4 @@ qa-screenshots/
 worker/wrangler.toml
 worker/.wrangler/
 worker/.dev.vars
+supabase/.temp/

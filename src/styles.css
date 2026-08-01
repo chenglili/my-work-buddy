@@ -1504,6 +1504,196 @@ textarea {
   object-fit: contain;
 }
 
+.top-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid #e5aec4;
+  background: #fff;
+  color: #7a3657;
+}
+
+.cloud-status.pending,
+.cloud-status.offline {
+  color: #7a3657;
+  background: #fff4d9;
+  border-color: #e8c976;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.cloud-access-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #ffe8f1;
+}
+
+.cloud-access-panel {
+  width: min(100%, 520px);
+  padding: 24px;
+  border: 1px solid #efb8cd;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(119, 58, 85, 0.12);
+}
+
+.cloud-access-panel.loading {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.cloud-access-panel.loading img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+}
+
+.cloud-access-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cloud-access-brand img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.access-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #fff0f6;
+}
+
+.access-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: transparent;
+  color: #704052;
+}
+
+.access-switch button.active {
+  background: #fff;
+  color: #9a2f60;
+  box-shadow: 0 2px 8px rgba(119, 58, 85, 0.1);
+}
+
+.cloud-access-form {
+  display: grid;
+  gap: 14px;
+}
+
+.cloud-access-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.cloud-access-form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 11px;
+  border: 1px solid #e6b3c7;
+  border-radius: 8px;
+  color: #4b3440;
+  background: #fffafd;
+}
+
+.cloud-access-form button,
+.cloud-access-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.cloud-access-message {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff3d5;
+  color: #684b25;
+}
+
+.cloud-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.device-management {
+  margin-top: 12px;
+}
+
+.device-management h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pair-code-result {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #efb8cd;
+  border-radius: 8px;
+  background: #fff6fa;
+}
+
+.pair-code-result strong {
+  font-size: 30px;
+  letter-spacing: 4px;
+  color: #9a2f60;
+}
+
+.pair-code-result span,
+.device-row span {
+  color: #7d6170;
+  font-size: 14px;
+}
+
+.device-list {
+  display: grid;
+  gap: 8px;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f2d4e0;
+}
+
+.device-row > div {
+  display: grid;
+  gap: 2px;
+}
+
 @media (min-width: 761px) and (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 180px 1fr;
@@ -1670,6 +1860,24 @@ textarea {
     min-height: 34px;
     padding: 5px 6px;
     font-size: 14px;
+  }
+
+  .top-icon-button {
+    width: 100%;
+  }
+
+  .cloud-access-screen {
+    padding: 12px;
+  }
+
+  .cloud-access-panel {
+    padding: 18px;
+  }
+
+  .pair-code-result,
+  .device-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   h1 {

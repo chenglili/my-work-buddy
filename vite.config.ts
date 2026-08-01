@@ -4,6 +4,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@supabase') || id.includes('/node_modules/idb/')) return 'cloud';
+          if (id.includes('/node_modules/react') || id.includes('/node_modules/scheduler/')) return 'react';
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     VitePWA({
