@@ -3416,3 +3416,181 @@ textarea {
   .pet-status-chip > div:first-child span { display: grid; justify-items: start; gap: 2px; }
   .pet-inventory-grid { grid-template-columns: 1fr; }
 }
+
+.pet-action-effects {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pet-feed-pellet {
+  position: absolute;
+  left: 17%;
+  top: 74%;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(128, 88, 21, 0.4);
+  border-radius: 50%;
+  background: #e7b543;
+  box-shadow: 0 2px 3px rgba(93, 72, 24, 0.2);
+  animation: pet-feed-pellet 1200ms cubic-bezier(0.32, 0.08, 0.35, 1) both;
+}
+
+.pet-feed-pellet.pellet-two {
+  width: 10px;
+  height: 10px;
+  animation-delay: 130ms;
+  background: #d99235;
+}
+
+.pet-feed-pellet.pellet-three {
+  width: 8px;
+  height: 8px;
+  animation-delay: 260ms;
+  background: #f0cc61;
+}
+
+.pet-action-effects-play .pet-effect-bell {
+  position: absolute;
+  top: 15%;
+  right: 18%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 2px solid #d9a0c1;
+  border-radius: 50%;
+  background: rgba(255, 247, 252, 0.92);
+  color: #a24979;
+  animation: pet-bell-ring 1100ms ease both;
+}
+
+.pet-music-note {
+  position: absolute;
+  color: #a24979;
+  font-size: 25px;
+  font-weight: 900;
+  text-shadow: 0 2px #fff;
+}
+
+.pet-music-note.note-one {
+  top: 17%;
+  right: 11%;
+  animation: pet-note-float 1100ms 180ms ease both;
+}
+
+.pet-music-note.note-two {
+  top: 23%;
+  right: 29%;
+  animation: pet-note-float 1100ms 320ms ease both;
+}
+
+.pet-water-drop {
+  position: absolute;
+  left: 15%;
+  top: 58%;
+  width: 14px;
+  height: 19px;
+  border-radius: 70% 30% 65% 35% / 55% 45% 55% 45%;
+  background: #61b9d2;
+  box-shadow: 0 2px 4px rgba(52, 124, 151, 0.25);
+  transform: rotate(25deg);
+  animation: pet-water-spray 1250ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+.pet-water-drop.drop-two {
+  width: 10px;
+  height: 14px;
+  animation-delay: 130ms;
+  background: #8ad7e3;
+}
+
+.pet-water-drop.drop-three {
+  width: 8px;
+  height: 12px;
+  animation-delay: 240ms;
+  background: #4da4c4;
+}
+
+.pet-water-ring {
+  position: absolute;
+  left: 8%;
+  top: 73%;
+  width: 76px;
+  height: 23px;
+  border: 3px solid rgba(72, 162, 190, 0.78);
+  border-radius: 50%;
+  animation: pet-water-ripple 1250ms ease both;
+}
+
+.pet-coin {
+  position: absolute;
+  top: 14%;
+  left: 48%;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #c78920;
+  border-radius: 50%;
+  background: #f4c95d;
+  box-shadow: 0 2px 4px rgba(130, 89, 17, 0.22);
+  animation: pet-coin-pop 1000ms ease both;
+}
+
+.pet-coin.coin-two {
+  animation-delay: 120ms;
+  background: #e8a936;
+}
+
+.pet-coin.coin-three {
+  animation-delay: 240ms;
+  background: #ffe08b;
+}
+
+@keyframes pet-feed-pellet {
+  0% { left: 17%; top: 74%; opacity: 0; transform: scale(0.45) rotate(0); }
+  18% { opacity: 1; }
+  55% { left: 34%; top: 49%; transform: scale(1.08) rotate(160deg); }
+  82% { left: 48%; top: 34%; opacity: 1; transform: scale(0.9) rotate(300deg); }
+  100% { left: 50%; top: 37%; opacity: 0; transform: scale(0.35) rotate(420deg); }
+}
+
+@keyframes pet-bell-ring {
+  0%, 100% { transform: rotate(0) scale(0.8); opacity: 0; }
+  18% { transform: rotate(-12deg) scale(1); opacity: 1; }
+  36% { transform: rotate(12deg); }
+  54% { transform: rotate(-9deg); }
+  72% { transform: rotate(7deg); opacity: 1; }
+}
+
+@keyframes pet-note-float {
+  0% { opacity: 0; transform: translate(0, 12px) scale(0.7) rotate(-12deg); }
+  25% { opacity: 1; transform: translate(0, 0) scale(1) rotate(5deg); }
+  100% { opacity: 0; transform: translate(20px, -42px) scale(1.18) rotate(18deg); }
+}
+
+@keyframes pet-water-spray {
+  0% { left: 15%; top: 58%; opacity: 0; transform: rotate(25deg) scale(0.5); }
+  18% { opacity: 1; }
+  68% { left: 42%; top: 39%; opacity: 1; transform: rotate(25deg) scale(1); }
+  100% { left: 47%; top: 35%; opacity: 0; transform: rotate(25deg) scale(0.7); }
+}
+
+@keyframes pet-water-ripple {
+  0% { opacity: 0; transform: scale(0.35); }
+  28% { opacity: 0.9; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+@keyframes pet-coin-pop {
+  0% { left: 48%; top: 18%; opacity: 0; transform: translateY(14px) scale(0.5) rotate(-20deg); }
+  28% { opacity: 1; transform: translateY(0) scale(1.05) rotate(8deg); }
+  100% { left: 66%; top: 4%; opacity: 0; transform: translateY(-12px) scale(0.8) rotate(36deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-action-effects * {
+    animation: none;
+  }
+}

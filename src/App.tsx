@@ -1135,7 +1135,8 @@ function PetPage({ state, setState, cloud, onToast }: { state: WorkspaceState; s
     setMotion(action);
     setMotionKey((value) => value + 1);
     if (motionTimer.current) window.clearTimeout(motionTimer.current);
-    motionTimer.current = window.setTimeout(() => setMotion("idle"), action === "play" ? 920 : 820);
+    const duration = action === "bathe" ? 1500 : action === "feed" ? 1400 : action === "play" ? 1300 : action === "purchase" ? 1100 : 820;
+    motionTimer.current = window.setTimeout(() => setMotion("idle"), duration);
   };
 
   const buyItem = async (itemId: PetItemId) => {
@@ -1235,6 +1236,7 @@ function PetScene({ pet, speech, motion, motionKey, busy, onInteract }: { pet: P
       <div className="pet-photo" role="img" aria-label={`${pet.name}站在鸟架上`}>
         <img key={`${motion}-${motionKey}`} className={`pet-character pet-motion-${motion}`} src="pets/sun-conure-cutout-v4.webp" alt="" />
         <PetFeedback motion={motion} motionKey={motionKey} />
+        <PetActionEffects motion={motion} motionKey={motionKey} />
         <img className="pet-perch-foreground" src="pets/sun-conure-perch-front-v2.png" alt="" />
         <div className="pet-hotspots" aria-label="鸟架互动热点">
           {petSceneHotspots.map((hotspot) => {
@@ -1255,6 +1257,14 @@ function PetFeedback({ motion, motionKey }: { motion: PetLastAction; motionKey: 
   if (motion === "play") return <div className="pet-feedback pet-feedback-play" key={motionKey} aria-hidden="true"><span><Bell size={17} /></span><span>♪</span><span>♡</span></div>;
   if (motion === "bathe") return <div className="pet-feedback pet-feedback-bathe" key={motionKey} aria-hidden="true"><span><Droplets size={18} /></span><span>•</span><span>✦</span></div>;
   if (motion === "purchase") return <div className="pet-feedback pet-feedback-purchase" key={motionKey} aria-hidden="true"><span><Star size={17} /></span><span>✦</span><span>✦</span></div>;
+  return null;
+}
+
+function PetActionEffects({ motion, motionKey }: { motion: PetLastAction; motionKey: number }) {
+  if (motion === "feed") return <div className="pet-action-effects pet-action-effects-feed" key={motionKey} aria-hidden="true"><span className="pet-feed-pellet pellet-one" /><span className="pet-feed-pellet pellet-two" /><span className="pet-feed-pellet pellet-three" /></div>;
+  if (motion === "play") return <div className="pet-action-effects pet-action-effects-play" key={motionKey} aria-hidden="true"><span className="pet-effect-bell"><Bell size={26} /></span><span className="pet-music-note note-one">♪</span><span className="pet-music-note note-two">♫</span></div>;
+  if (motion === "bathe") return <div className="pet-action-effects pet-action-effects-bathe" key={motionKey} aria-hidden="true"><span className="pet-water-drop drop-one" /><span className="pet-water-drop drop-two" /><span className="pet-water-drop drop-three" /><span className="pet-water-ring" /></div>;
+  if (motion === "purchase") return <div className="pet-action-effects pet-action-effects-purchase" key={motionKey} aria-hidden="true"><span className="pet-coin coin-one" /><span className="pet-coin coin-two" /><span className="pet-coin coin-three" /></div>;
   return null;
 }
 
