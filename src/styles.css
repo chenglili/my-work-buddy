@@ -806,6 +806,35 @@ button {
   color: #d73f83;
 }
 
+.copybook-tracing {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.copybook-trace-cell {
+  display: grid;
+  min-height: 68px;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px dashed #e9a4bb;
+  border-radius: 8px;
+  background: #fff8fb;
+  color: #fde2ed;
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  -webkit-text-stroke: 1.5px #ef9bb7;
+}
+
+.copybook-trace-caption {
+  margin: 6px 0 0;
+  color: #9e7083;
+  font-size: 13px;
+  text-align: center;
+}
+
 .dictation-word,
 .timer,
 .picture-scene {

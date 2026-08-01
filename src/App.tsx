@@ -635,7 +635,7 @@ function CopybookPreview({ dateKey, onProgress }: { dateKey: string; onProgress:
   useEffect(() => onProgress({ ready: done, durationSeconds: 0, attempts: 1, wrongQuestions: [], evidence: done ? `${content.words.length}个字，每字练写3遍` : undefined, message: done ? "练字记录完成，可以提交家长审核。" : undefined }), [done, content.words.length, onProgress]);
   return (
     <div className="panel-list">
-      <div className="content-grid">{content.words.map((item) => <article className="word-card" key={item.word}><strong>{item.word}</strong><p>{item.pinyin}</p><p>{item.strokes}</p><p>{item.group}</p></article>)}</div>
+      <div className="content-grid">{content.words.map((item) => <article className="word-card" key={item.word}><strong>{item.word}</strong><p>{item.pinyin}</p><p>{item.strokes}</p><p>{item.group}</p><div className="copybook-tracing" aria-label={`${item.word}三遍描红`} role="group">{[1, 2, 3].map((round) => <span className="copybook-trace-cell" key={round} aria-label={`第${round}遍描红`}>{item.word}</span>)}</div><p className="copybook-trace-caption">描红三遍</p></article>)}</div>
       <label className="confirm-check panel"><input type="checkbox" checked={done} onChange={(event) => setDone(event.target.checked)} />我已经每个字认真练写3遍</label>
     </div>
   );
