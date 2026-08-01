@@ -491,7 +491,6 @@ export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => s
 
 const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoints: number, rewardRequests: RewardRequest[]) => {
   const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && (result.firstScore ?? result.score) !== undefined);
-  const totalDurationSeconds = results.reduce((sum, result) => sum + result.durationSeconds, 0);
   const arithmeticAverage = arithmeticResults.length
     ? Math.round(arithmeticResults.reduce((sum, result) => sum + (result.firstScore ?? result.score ?? 0), 0) / arithmeticResults.length)
     : 0;
@@ -500,7 +499,6 @@ const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoi
   return {
     completedDays,
     taskCount: results.length,
-    totalDurationSeconds,
     arithmeticAverage,
     wrongQuestions,
     earnedPoints,
