@@ -272,7 +272,7 @@ export default function App() {
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible={!workspace.enabled || requiredTaskIds.includes(currentTask.id) || optionalTaskIds.includes(currentTask.id)} dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
+          <TaskPage task={currentTask} completed={state.completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
         ) : route.view === "home" ? (
           <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
@@ -299,10 +299,12 @@ export default function App() {
 }
 
 function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController }) {
-  const [accessType, setAccessType] = useState<"parent" | "child">(workspace.mode === "pairing" ? "child" : "parent");
+  const [accessType, setAccessType] = useState<"parent-code" | "parent-email" | "child">(workspace.mode === "pairing" ? "child" : "parent-code");
   const [email, setEmail] = useState("");
   const [pairCode, setPairCode] = useState("");
+  const [parentCode, setParentCode] = useState("");
   const [deviceName, setDeviceName] = useState("孩子的设备");
+  const [parentDeviceName, setParentDeviceName] = useState("家长电脑");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -318,6 +320,19 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
       await workspace.loginParent(email.trim());
     } catch (loginError) {
       setMessage(loginError instanceof Error ? loginError.message : "登录邮件发送失败。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitParentCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      await workspace.pairParent(parentCode, parentDeviceName.trim());
+    } catch (pairError) {
+      setMessage(pairError instanceof Error ? pairError.message : "家长配对码无效或已过期。");
     } finally {
       setBusy(false);
     }
@@ -382,14 +397,23 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
       <section className="cloud-access-panel">
         <div className="cloud-access-brand"><img src={characterImages["hello-kitty"]} alt="" /><div><p className="eyebrow">云端多设备同步</p><h1>甜心工作台</h1></div></div>
         <div className="access-switch" role="tablist" aria-label="选择进入方式">
-          <button className={accessType === "parent" ? "active" : ""} role="tab" aria-selected={accessType === "parent"} onClick={() => setAccessType("parent")}><Mail size={18} />家长登录</button>
+          <button className={accessType === "parent-code" ? "active" : ""} role="tab" aria-selected={accessType === "parent-code"} onClick={() => setAccessType("parent-code")}><LockKeyhole size={18} />家长快速登录</button>
           <button className={accessType === "child" ? "active" : ""} role="tab" aria-selected={accessType === "child"} onClick={() => setAccessType("child")}><Smartphone size={18} />孩子设备</button>
         </div>
 
-        {accessType === "parent" ? (
+        {accessType === "parent-code" ? (
+          <form className="cloud-access-form" onSubmit={submitParentCode}>
+            <p className="cloud-access-hint">请在已登录的家长设备中生成家长配对码，输入一次后本设备会保持登录。</p>
+            <label>家长配对码<input inputMode="numeric" maxLength={6} required value={parentCode} onChange={(event) => setParentCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" /></label>
+            <label>设备名称<input maxLength={20} required value={parentDeviceName} onChange={(event) => setParentDeviceName(event.target.value)} /></label>
+            <button className="primary" disabled={busy || parentCode.length !== 6}>{busy ? <RefreshCw className="spin" size={18} /> : <LockKeyhole size={18} />}使用家长配对码登录</button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setAccessType("parent-email")}><Mail size={17} />改用邮箱登录</button>
+          </form>
+        ) : accessType === "parent-email" ? (
           <form className="cloud-access-form" onSubmit={submitParent}>
             <label>家长邮箱<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
             <button className="primary" disabled={busy || !email.trim()}>{busy ? <RefreshCw className="spin" size={18} /> : <Mail size={18} />}发送登录链接</button>
+            <button type="button" className="secondary" disabled={busy} onClick={() => setAccessType("parent-code")}><LockKeyhole size={17} />返回家长快速登录</button>
           </form>
         ) : (
           <form className="cloud-access-form" onSubmit={submitChild}>
@@ -433,7 +457,6 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
   const dailyTasks = requiredTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const optionalTasks = optionalTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const readyTaskIds = new Set([...state.completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...syncPendingIds]);
-  const requiredDone = requiredTaskIds.every((id) => readyTaskIds.has(id));
   const report = getWeeklyReport(state);
   const weeklyTarget = 250;
   const weeklyProgress = Math.min(100, Math.round((report.earnedPoints / weeklyTarget) * 100));
@@ -459,9 +482,9 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
       <TaskGrid tasks={dailyTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
       <div className="section-title compact-title">
         <Trophy size={34} />
-        <div><h2>奖励小游戏</h2><p>{requiredDone ? "今日计划完成，小游戏已解锁。" : "完成今日计划后解锁，不影响全通关。"}</p></div>
+        <div><h2>奖励小游戏</h2><p>所有小游戏均已开放，完成后可获得积分。</p></div>
       </div>
-      <TaskGrid tasks={optionalTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={!requiredDone} />
+      <TaskGrid tasks={optionalTasks} completedIds={state.completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
     </section>
   );
 }
@@ -469,8 +492,6 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
 function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredTaskIds, dateKey, onOpenTask }: { view: TaskCategory; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; dateKey: string; onOpenTask: (taskId: string) => void }) {
   const tasks = taskCatalog.filter((task) => task.category === view);
   const meta = sectionMeta[view];
-  const readyTaskIds = new Set([...completedIds, ...pendingIds, ...syncPendingIds]);
-  const gamesLocked = view === "game" && !requiredTaskIds.every((id) => readyTaskIds.has(id));
   return (
     <section>
       <div className="section-title">
@@ -478,7 +499,7 @@ function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredT
         <div><p className="eyebrow">{curriculumNote}</p><h2>{meta.label}</h2></div>
       </div>
       {view === "chinese" || view === "math" || view === "english" ? <SubjectDashboard view={view} dateKey={dateKey} tasks={tasks} completedIds={completedIds} /> : null}
-      <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} locked={gamesLocked} />
+      <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
     </section>
   );
 }
@@ -503,7 +524,7 @@ function SubjectDashboard({ view, dateKey, tasks, completedIds }: { view: "chine
   );
 }
 
-function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTaskIds, onOpenTask, locked = false }: { tasks: TaskDefinition[]; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void; locked?: boolean }) {
+function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTaskIds, onOpenTask }: { tasks: TaskDefinition[]; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void }) {
   return (
     <div className="task-grid">
       {tasks.map((task) => {
@@ -520,7 +541,7 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
               <p>{task.summary}</p>
             </div>
             <div className="card-actions">
-              <button className="secondary" disabled={locked || syncPending} onClick={() => onOpenTask(task.id)}>{locked ? <LockKeyhole size={16} /> : pending || syncPending ? <Clock3 size={16} /> : <Play size={16} />}{locked ? "完成计划后解锁" : syncPending ? "等待同步" : pending ? "查看提交" : completed ? "查看练习" : "开始挑战"}</button>
+              <button className="secondary" disabled={syncPending} onClick={() => onOpenTask(task.id)}>{pending || syncPending ? <Clock3 size={16} /> : <Play size={16} />}{syncPending ? "等待同步" : pending ? "查看提交" : completed ? "查看练习" : "开始挑战"}</button>
             </div>
           </article>
         );
@@ -774,6 +795,7 @@ function answerMatches(input: string, answer: string) {
 interface AutoPracticeItem {
   prompt: string;
   answer: string;
+  unit?: string;
   isCorrect?: (input: string) => boolean;
 }
 
@@ -797,6 +819,31 @@ function AutoPractice({ title, items, guide, placeholder = "写答案", onProgre
   return <div className="panel"><h3>{title}</h3>{guide ? <p className="practice-guide">{guide}</p> : null}{items.map(({ prompt, answer }, index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder={placeholder} />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
+function WordProblemPractice({ items, guide, onProgress }: { items: AutoPracticeItem[]; guide: string; onProgress: (outcome: TaskOutcome) => void }) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [checked, setChecked] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const changeAnswer = (index: number, value: string) => {
+    setAnswers((current) => ({ ...current, [index]: value }));
+    setChecked(false);
+    onProgress({ ...emptyOutcome, attempts, message: "答案已修改，请重新核对。" });
+  };
+  const appendUnit = (index: number, unit: string) => {
+    const current = answers[index] ?? "";
+    const withoutUnit = current.replace(/[（(][\u4e00-\u9fff]+[）)]$/, "").trimEnd();
+    changeAnswer(index, `${withoutUnit}（${unit}）`);
+  };
+  const check = () => {
+    const wrong = items.map((item, index) => item.isCorrect?.(answers[index] ?? "") ? "" : item.prompt).filter(Boolean);
+    const score = Math.round(((items.length - wrong.length) / items.length) * 100);
+    const nextAttempts = attempts + 1;
+    setChecked(true);
+    setAttempts(nextAttempts);
+    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再检查算式和单位。` });
+  };
+  return <div className="panel"><h3>生活化应用题</h3><p className="practice-guide">{guide}</p>{items.map((item, index) => { const unit = item.answer.match(/[（(]([\u4e00-\u9fff]+)[）)]$/)?.[1]; return <div className="question" key={`${item.prompt}-${index}`}><p>{item.prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder="例如：18+7=25" />{unit ? <div className="unit-picker" aria-label="选择答案单位"><span>答案单位：</span><button type="button" className="secondary" onClick={() => appendUnit(index, unit)}>（{unit}）</button></div> : null}{checked ? <p className="answer">答案：{item.answer}</p> : null}</div>; })}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+}
+
 function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const daySeed = Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000);
   const facts = Array.from({ length: 30 }, (_, index) => ({ first: 1 + (index % 6), second: 1 + Math.floor(index / 6) }));
@@ -811,6 +858,7 @@ function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: 
 function WordProblems({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const offset = (Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000) * 5) % wordProblems.length;
   const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((problem) => ({ prompt: problem.prompt, answer: problem.answer, isCorrect: (input: string) => wordProblemAnswerMatches(input, problem) }));
+  if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" onProgress={onProgress} />;
   return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" items={items} onProgress={onProgress} />;
 }
 
@@ -835,6 +883,7 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
           </div>
         ))}
       </article>
+      <EnglishWordReview lesson={lesson} />
       <EnglishListeningGame lesson={lesson} />
       <article className="panel">
         <h3>核心句型</h3>
@@ -848,6 +897,7 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
           ))}
         </div>
       </article>
+      <EnglishMeaningQuiz lesson={lesson} />
       <article className="panel english-chant">
         <div><p className="eyebrow">玉桂狗节奏秀</p><h3>拍手跟读三遍</h3><p>{lesson.chant}</p></div>
         <button className="secondary" onClick={() => speak(lesson.chant, "en-GB")}><Play size={16} />播放节奏句</button>
@@ -858,6 +908,70 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
         <ol className="practice-steps">{lesson.tasks.map((task) => <li key={task}>{task}</li>)}</ol>
       </article>
     </div>
+  );
+}
+
+function EnglishWordReview({ lesson }: { lesson: ReturnType<typeof getWeeklyContent>["english"] }) {
+  const [index, setIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const word = lesson.words[index];
+
+  const next = () => {
+    setIndex((value) => (value + 1) % lesson.words.length);
+    setRevealed(false);
+  };
+
+  return (
+    <article className="panel english-word-review">
+      <div className="listening-head"><div><p className="eyebrow">复习闪卡 · 先想一想再翻开</p><h3>单词回忆 {index + 1}/{lesson.words.length}</h3></div><strong>{word.word}</strong></div>
+      <div className="english-flashcard" aria-live="polite">
+        <span className="flashcard-word">{word.word}</span>
+        {revealed ? <><span className="flashcard-meaning">{word.meaning}</span><span>{word.sentence}</span></> : <span className="flashcard-hidden">先说出中文意思，再点击显示答案</span>}
+      </div>
+      <div className="inline-actions">
+        <button className="secondary" onClick={() => speak(word.word, "en-GB")}><Play size={16} />听发音</button>
+        <button className="secondary" onClick={() => setRevealed((value) => !value)}>{revealed ? "合上闪卡" : "显示答案"}</button>
+        <button className="primary" onClick={next}><ChevronRight size={16} />下一个</button>
+      </div>
+    </article>
+  );
+}
+
+function EnglishMeaningQuiz({ lesson }: { lesson: ReturnType<typeof getWeeklyContent>["english"] }) {
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState("");
+  const [score, setScore] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const pattern = lesson.patterns[index];
+  const options = useMemo(() => {
+    const distractors = lesson.patterns.filter((item) => item.sentence !== pattern.sentence).map((item) => item.sentence);
+    return [pattern.sentence, ...distractors].sort((a, b) => a.localeCompare(b, "en"));
+  }, [lesson.patterns, pattern.sentence]);
+
+  const choose = (sentence: string) => {
+    if (selected) return;
+    setSelected(sentence);
+    if (sentence === pattern.sentence) setScore((value) => value + 1);
+  };
+
+  const next = () => {
+    if (index === lesson.patterns.length - 1) setFinished(true);
+    else setIndex((value) => value + 1);
+    setSelected("");
+  };
+
+  const restart = () => {
+    setIndex(0);
+    setSelected("");
+    setScore(0);
+    setFinished(false);
+  };
+
+  return (
+    <article className="panel english-meaning-quiz">
+      <div className="listening-head"><div><p className="eyebrow">句意理解 · 把中文意思配成英文</p><h3>句子小测 {finished ? lesson.patterns.length : index + 1}/{lesson.patterns.length}</h3></div><strong><Star size={18} />{score}</strong></div>
+      {finished ? <div className="english-quiz-finish"><h3>本轮完成：{score}/{lesson.patterns.length}</h3><p>{score === lesson.patterns.length ? "全部配对成功，句型已经记住啦。" : "错题再听一遍，再挑战一次会更稳。"}</p><button className="secondary" onClick={restart}><RotateCcw size={16} />再练一轮</button></div> : <><p className="sentence-meaning">{pattern.meaning}</p><div className="english-meaning-options">{options.map((option) => <button className={selected === option ? (option === pattern.sentence ? "correct-choice" : "wrong-choice") : "secondary"} key={option} onClick={() => choose(option)}>{option}</button>)}</div>{selected ? <div className="inline-actions english-quiz-next"><button className="primary" onClick={next}><ChevronRight size={16} />{index === lesson.patterns.length - 1 ? "查看结果" : "下一题"}</button><button className="secondary" onClick={() => speak(pattern.sentence, "en-GB")}><Play size={16} />听一遍</button></div> : null}</>}
+    </article>
   );
 }
 
@@ -1301,6 +1415,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
   const [calendarMonth, setCalendarMonth] = useState(state.dateKey.slice(0, 7));
   const [reportPeriod, setReportPeriod] = useState<"day" | "week" | "month">("day");
   const [generatedPairCode, setGeneratedPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [generatedParentPairCode, setGeneratedParentPairCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const cloudParent = cloud.enabled && cloud.role === "parent";
   const parentUnlocked = cloud.enabled ? cloudParent : parentSession?.dateKey === state.dateKey;
   const parentPin = parentSession?.pin ?? pin;
@@ -1455,6 +1570,16 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     }
   };
 
+  const generateParentPairCode = async () => {
+    try {
+      const code = await cloud.createParentPairCode();
+      setGeneratedParentPairCode(code);
+      setMessage("家长设备配对码已生成，十分钟内有效。请在桌面 PWA 中输入。 ");
+    } catch (pairError) {
+      setMessage(pairError instanceof Error ? pairError.message : "家长配对码生成失败。");
+    }
+  };
+
   const revokeDevice = async (userId: string) => {
     try {
       await cloud.revokeDevice(userId);
@@ -1524,7 +1649,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
               <section className="parent-section learning-report"><div className="report-heading"><h3><BarChart3 size={20} /> 学习报告总结</h3><div className="report-switch" role="tablist" aria-label="学习报告周期"><button className={reportPeriod === "day" ? "active" : ""} role="tab" aria-selected={reportPeriod === "day"} onClick={() => setReportPeriod("day")}>本日</button><button className={reportPeriod === "week" ? "active" : ""} role="tab" aria-selected={reportPeriod === "week"} onClick={() => setReportPeriod("week")}>本周</button><button className={reportPeriod === "month" ? "active" : ""} role="tab" aria-selected={reportPeriod === "month"} onClick={() => setReportPeriod("month")}>本月</button></div></div><div className="report-metrics"><div><span>完成任务</span><strong>{report.taskCount}项</strong></div><div><span>完整打卡</span><strong>{report.completedDays}天</strong></div><div><span>有效时长</span><strong>{Math.round(report.totalDurationSeconds / 60)}分钟</strong></div><div><span>口算正确率</span><strong>{report.arithmeticAverage ? `${report.arithmeticAverage}%` : "暂无"}</strong></div><div><span>获得积分</span><strong>{report.earnedPoints}</strong></div></div><p className="report-summary">{getLearningReportSummary(reportPeriod, report)}</p><p className="report-wrong">主要错题：{report.wrongQuestions.length ? report.wrongQuestions.slice(0, 5).join("、") : "暂无记录"}</p></section>
               <section className="parent-section"><h3>调整积分</h3><p>用于家长补发奖励或修正记录，负数会扣减但不会低于0。</p><input value={adjustment} onChange={(event) => setAdjustment(event.target.value.replace(/[^\d-]/g, ""))} placeholder="例如 10 或 -5" /><button className="secondary" onClick={applyAdjustment}>确认调整</button></section>
             </div>
-            {cloud.enabled && cloudParent ? <section className="parent-section device-management"><div className="parent-section-head"><div><p className="eyebrow">孩子设备只可学习和提交</p><h3><Smartphone size={20} /> 设备管理</h3></div><button className="primary" onClick={() => void generatePairCode()}>生成配对码</button></div>{generatedPairCode ? <div className="pair-code-result"><strong>{generatedPairCode.code}</strong><span>十分钟内有效</span></div> : null}<div className="device-list">{cloud.devices.length ? cloud.devices.map((device) => <div className="device-row" key={device.userId}><div><strong>{device.name}</strong><span>{new Date(device.createdAt).toLocaleDateString("zh-CN")}</span></div><button className="secondary" onClick={() => void revokeDevice(device.userId)}>移除</button></div>) : <p className="muted">还没有配对孩子设备。</p>}</div></section> : null}
+            {cloud.enabled && cloudParent ? <section className="parent-section device-management"><div className="parent-section-head"><div><p className="eyebrow">家长设备无需邮箱登录</p><h3><LockKeyhole size={20} /> 快速登录码</h3></div><button className="primary" onClick={() => void generateParentPairCode()}>生成家长码</button></div>{generatedParentPairCode ? <div className="pair-code-result"><strong>{generatedParentPairCode.code}</strong><span>十分钟内有效 · 仅使用一次</span></div> : null}<div className="parent-section-head"><div><p className="eyebrow">孩子设备只可学习和提交</p><h3><Smartphone size={20} /> 设备管理</h3></div><button className="secondary" onClick={() => void generatePairCode()}>生成孩子码</button></div>{generatedPairCode ? <div className="pair-code-result"><strong>{generatedPairCode.code}</strong><span>十分钟内有效</span></div> : null}<div className="device-list">{cloud.devices.length ? cloud.devices.map((device) => <div className="device-row" key={device.userId}><div><strong>{device.name}</strong><span>{new Date(device.createdAt).toLocaleDateString("zh-CN")}</span></div><button className="secondary" onClick={() => void revokeDevice(device.userId)}>移除</button></div>) : <p className="muted">还没有配对孩子设备。</p>}</div></section> : null}
           </>}
         </div>
       ) : null}

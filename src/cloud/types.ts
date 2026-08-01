@@ -53,6 +53,7 @@ export interface CloudWorkspaceController {
   legacyPreview: LegacyImportPreview | null;
   setLocalState: React.Dispatch<React.SetStateAction<WorkspaceState>>;
   loginParent(email: string): Promise<void>;
+  pairParent(code: string, deviceName: string): Promise<void>;
   pairChild(code: string, deviceName: string): Promise<void>;
   signOut(): Promise<void>;
   refresh(): Promise<void>;
@@ -70,5 +71,6 @@ export interface CloudWorkspaceController {
   purchasePetItem(itemId: PetItemId): Promise<void>;
   interactPet(action: PetAction, itemId: PetItemId): Promise<void>;
   createPairCode(): Promise<{ code: string; expiresAt: string }>;
+  createParentPairCode(): Promise<{ code: string; expiresAt: string }>;
   revokeDevice(userId: string): Promise<void>;
 }
