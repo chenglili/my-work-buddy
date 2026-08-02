@@ -1,5 +1,5 @@
 begin;
-select plan(59);
+select plan(64);
 
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
@@ -33,6 +33,39 @@ select is(
   public.required_task_ids_for_date(date '2026-08-02'),
   array['chinese-morning-reading', 'english-daily', 'chinese-night-reading', 'sport-rope']::text[],
   'Sunday uses the lighter four-task plan'
+);
+select is(
+  public.required_task_ids_for_date_with_history(date '2026-08-02', true),
+  array['chinese-morning-reading', 'math-arithmetic', 'english-daily', 'chinese-night-reading', 'sport-rope', 'chinese-dictation']::text[],
+  'completed Saturday unlocks the full second-day Sunday plan'
+);
+select is(
+  public.required_task_ids_for_date_with_history(date '2026-08-02', false),
+  array['chinese-morning-reading', 'english-daily', 'chinese-night-reading', 'sport-rope']::text[],
+  'incomplete Saturday keeps the lighter Sunday plan'
+);
+insert into public.families (name) values ('second-day-plan-test');
+insert into public.children (family_id)
+select id from public.families where name = 'second-day-plan-test';
+insert into public.daily_plans (child_id, date_key, required_task_ids, bonus_awarded)
+select id, date '2026-08-01', array['chinese-morning-reading']::text[], true
+from public.children
+where family_id = (select id from public.families where name = 'second-day-plan-test');
+insert into public.daily_plans (child_id, date_key, required_task_ids)
+select id, date '2026-08-02', array['chinese-morning-reading', 'english-daily', 'chinese-night-reading', 'sport-rope']::text[]
+from public.children
+where family_id = (select id from public.families where name = 'second-day-plan-test');
+select is(
+  (select required_task_ids
+     from public.ensure_daily_plan(
+       (select c.id
+          from public.children c
+          join public.families f on f.id = c.family_id
+         where f.name = 'second-day-plan-test'),
+       date '2026-08-02'
+     )),
+  array['chinese-morning-reading', 'math-arithmetic', 'english-daily', 'chinese-night-reading', 'sport-rope', 'chinese-dictation']::text[],
+  'an existing light Sunday plan upgrades after the previous day is complete'
 );
 
 select ok((select relrowsecurity from pg_class where oid = 'public.families'::regclass), 'families has RLS enabled');

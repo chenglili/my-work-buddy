@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
+import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, getWeeklyContent, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
 import { generateArithmetic, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
@@ -53,9 +53,24 @@ describe("daily task planning", () => {
     expect(sunday).toHaveLength(4);
     expect(sunday).not.toContain("math-arithmetic");
 
+    const secondDay = getDailyTaskIds(day("2026-08-02"), { previousDayCompleted: true });
+    expect(secondDay).toHaveLength(6);
+    expect(secondDay).toEqual(expect.arrayContaining(["math-arithmetic", "chinese-dictation"]));
+
     expect(getDailyTaskIds(day("2026-08-03"))).toContain("chinese-reading-comprehension");
     expect(getDailyTaskIds(day("2026-08-04"))).toContain("chinese-memorize");
     expect(getDailyTaskIds(day("2026-08-05"))).toContain("chinese-preview-copybook");
+  });
+
+  it("changes subject focus on the second day of a summer unit", () => {
+    const firstDay = getWeeklyContent(day("2026-08-01"));
+    const secondDay = getWeeklyContent(day("2026-08-02"));
+
+    expect(secondDay.readingTitle).toContain("听读与理解");
+    expect(secondDay.words).not.toEqual(firstDay.words);
+    expect(secondDay.dictation).not.toEqual(firstDay.dictation);
+    expect(secondDay.english.title).toContain("听读与理解");
+    expect(secondDay.english.words).not.toEqual(firstDay.english.words);
   });
 
   it("covers all eight August units and ends with a September 1 review", () => {
