@@ -151,6 +151,41 @@ const encouragements = [
 
 const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
 
+const PRACTICE_DRAFT_PREFIX = "my-work-buddy-practice-draft-v1:";
+
+const readPracticeDraft = <T,>(key: string): T | undefined => {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const saved = window.localStorage.getItem(`${PRACTICE_DRAFT_PREFIX}${key}`);
+    return saved ? JSON.parse(saved) as T : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+function usePracticeDraft<T>(key: string, initial: T) {
+  const [value, setValue] = useState<T>(() => readPracticeDraft<T>(key) ?? initial);
+  const keyRef = useRef(key);
+  const initialRef = useRef(initial);
+  initialRef.current = initial;
+
+  useEffect(() => {
+    if (keyRef.current === key) return;
+    keyRef.current = key;
+    setValue(readPracticeDraft<T>(key) ?? initialRef.current);
+  }, [key]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(`${PRACTICE_DRAFT_PREFIX}${key}`, JSON.stringify(value));
+    } catch {
+      // Local storage may be unavailable in private browsing; the exercise still works in memory.
+    }
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
 const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set([
   ...state.completedTaskIds,
   ...state.taskResults.filter((result) => result.dateKey === state.dateKey).map((result) => result.taskId),
@@ -634,10 +669,8 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
 
 function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
   const directCompletion = task.completionMode === "auto" && task.minimumScore === 0;
-  const [outcome, setOutcome] = useState<TaskOutcome>(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome);
-  useEffect(() => {
-    setOutcome(completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome);
-  }, [task.id, completed, directCompletion]);
+  const initialOutcome = completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome;
+  const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(`task:${task.id}:${dateKey}`, initialOutcome);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
 
@@ -686,7 +719,7 @@ function TaskContent({ task, dateKey, existingResult, onProgress }: { task: Task
     case "english-daily": return <EnglishDaily dateKey={dateKey} />;
     case "sport-rope":
     case "sport-high-jump":
-    case "sport-hour": return <SportTask taskId={task.id} onProgress={onProgress} />;
+    case "sport-hour": return <SportTask taskId={task.id} dateKey={dateKey} onProgress={onProgress} />;
     default: return <GameTask key={`${task.id}-${dateKey}`} taskId={task.id} dateKey={dateKey} onProgress={onProgress} />;
   }
 }
@@ -828,7 +861,7 @@ function MorningReading({ dateKey }: { dateKey: string }) {
 
 function CopybookPreview({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const content = getWeeklyContent(dateFromKey(dateKey));
-  const [done, setDone] = useState(false);
+  const [done, setDone] = usePracticeDraft<boolean>(`copybook:${dateKey}`, false);
   useEffect(() => onProgress({ ready: done, durationSeconds: 0, attempts: 1, wrongQuestions: [], evidence: done ? `${content.words.length}个字，每字练写3遍` : undefined, message: done ? "练字记录完成，可以提交家长审核。" : undefined }), [done, content.words.length, onProgress]);
   return (
     <div className="panel-list">
@@ -840,7 +873,7 @@ function CopybookPreview({ dateKey, onProgress }: { dateKey: string; onProgress:
 
 function Memorize({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const passages = getWeeklyContent(dateFromKey(dateKey)).memorization;
-  const [passed, setPassed] = useState<boolean[]>(passages.map(() => false));
+  const [passed, setPassed] = usePracticeDraft<boolean[]>(`memorize:${dateKey}`, passages.map(() => false));
   const ready = passed.every(Boolean);
   useEffect(() => onProgress({ ready, durationSeconds: 0, attempts: 1, wrongQuestions: [], evidence: `已勾选${passed.filter(Boolean).length}/${passages.length}段`, message: ready ? "背诵闯关完成，可以提交家长审核。" : undefined }), [ready, passed, passages.length, onProgress]);
   return <div className="panel-list">{passages.map((line, index) => <article className="panel" key={line}><h3>第{index + 1}关</h3><p className="poem-line">{line}</p><div className="inline-actions"><button className="secondary" onClick={() => speak(line)}><Play size={16} />听一遍</button><label className="mini-check"><input type="checkbox" checked={passed[index]} onChange={(event) => setPassed(passed.map((value, itemIndex) => itemIndex === index ? event.target.checked : value))} />已背会</label></div></article>)}</div>;
@@ -848,11 +881,11 @@ function Memorize({ dateKey, onProgress }: { dateKey: string; onProgress: (outco
 
 function Dictation({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const words = getWeeklyContent(dateFromKey(dateKey)).dictation;
-  const [index, setIndex] = useState(0);
-  const [showAnswers, setShowAnswers] = useState(false);
-  const [ratings, setRatings] = useState<Record<number, "correct" | "retry">>({});
-  const [replayedIndices, setReplayedIndices] = useState<number[]>([]);
-  const [replayCount, setReplayCount] = useState(0);
+  const [index, setIndex] = usePracticeDraft<number>(`dictation:${dateKey}:index`, 0);
+  const [showAnswers, setShowAnswers] = usePracticeDraft<boolean>(`dictation:${dateKey}:answers`, false);
+  const [ratings, setRatings] = usePracticeDraft<Record<number, "correct" | "retry">>(`dictation:${dateKey}:ratings`, {});
+  const [replayedIndices, setReplayedIndices] = usePracticeDraft<number[]>(`dictation:${dateKey}:replayed`, []);
+  const [replayCount, setReplayCount] = usePracticeDraft<number>(`dictation:${dateKey}:replay-count`, 0);
   const current = words[index];
   const playCurrent = () => speak(`请写：${current}`);
   const replayWrongWord = (wordIndex: number) => {
@@ -889,7 +922,7 @@ function NightReading({ dateKey }: { dateKey: string }) {
 
 function PictureWriting({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const picture = getWeeklyContent(dateFromKey(dateKey)).picture;
-  const [text, setText] = useState("");
+  const [text, setText] = usePracticeDraft<string>(`picture-writing:${dateKey}`, "");
   const ready = text.replace(/\s/g, "").length >= 10;
   useEffect(() => onProgress({ ready, durationSeconds: 0, attempts: 1, wrongQuestions: [], evidence: ready ? `看图写话${text.replace(/\s/g, "").length}字` : undefined, message: ready ? "已经写够2–4句话，可以提交家长审核。" : undefined }), [ready, text, onProgress]);
   return <div className="panel"><h3>情景：{picture.title}</h3><div className="picture-scene">{picture.scene}</div><p>提示词：{picture.hints}</p><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="写2–4句话，先写看到了什么，再写大家在做什么。" /><details><summary>完成后查看范文</summary><p>{picture.example}</p></details></div>;
@@ -899,10 +932,10 @@ function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; o
   const date = dateFromKey(dateKey);
   const weekNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 604800000);
   const item = readingComprehensions[weekNumber % readingComprehensions.length];
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [checked, setChecked] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [missingHints, setMissingHints] = useState<Record<string, string[]>>({});
+  const [answers, setAnswers] = usePracticeDraft<Record<string, string>>(`reading-comprehension:${dateKey}:answers`, {});
+  const [checked, setChecked] = usePracticeDraft<boolean>(`reading-comprehension:${dateKey}:checked`, false);
+  const [attempts, setAttempts] = usePracticeDraft<number>(`reading-comprehension:${dateKey}:attempts`, 0);
+  const [missingHints, setMissingHints] = usePracticeDraft<Record<string, string[]>>(`reading-comprehension:${dateKey}:hints`, {});
   const changeAnswer = (questionId: string, value: string) => {
     setAnswers((current) => ({ ...current, [questionId]: value }));
     setChecked(false);
@@ -928,10 +961,10 @@ function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; o
 
 function Arithmetic({ dateKey, existingResult, onProgress }: { dateKey: string; existingResult?: TaskResult; onProgress: (outcome: TaskOutcome) => void }) {
   const questions = useMemo(() => generateArithmetic(dateKey, 20), [dateKey]);
-  const [answers, setAnswers] = useState<Record<number, string>>(() => Object.fromEntries(Object.entries(existingResult?.answers ?? {}).map(([index, answer]) => [Number(index), answer])));
-  const [attempts, setAttempts] = useState(0);
-  const [initialWrongIndices, setInitialWrongIndices] = useState<number[] | null>(null);
-  const [retryIndices, setRetryIndices] = useState<number[]>([]);
+  const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`arithmetic:${dateKey}:answers`, Object.fromEntries(Object.entries(existingResult?.answers ?? {}).map(([index, answer]) => [Number(index), answer])));
+  const [attempts, setAttempts] = usePracticeDraft<number>(`arithmetic:${dateKey}:attempts`, 0);
+  const [initialWrongIndices, setInitialWrongIndices] = usePracticeDraft<number[] | null>(`arithmetic:${dateKey}:initial-wrong`, null);
+  const [retryIndices, setRetryIndices] = usePracticeDraft<number[]>(`arithmetic:${dateKey}:retry`, []);
   const displayedIndices = initialWrongIndices === null ? questions.map((_, index) => index) : retryIndices;
   const allDisplayedAnswersFilled = areAllArithmeticAnswersFilled(questions, answers, displayedIndices);
   const check = () => {
@@ -974,10 +1007,10 @@ interface AutoPracticeItem {
   isCorrect?: (input: string) => boolean;
 }
 
-function AutoPractice({ title, items, guide, placeholder = "写答案", onProgress }: { title: string; items: AutoPracticeItem[]; guide?: string; placeholder?: string; onProgress: (outcome: TaskOutcome) => void }) {
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [checked, setChecked] = useState(false);
-  const [attempts, setAttempts] = useState(0);
+function AutoPractice({ title, items, guide, placeholder = "写答案", draftKey, onProgress }: { title: string; items: AutoPracticeItem[]; guide?: string; placeholder?: string; draftKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+  const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`${draftKey}:answers`, {});
+  const [checked, setChecked] = usePracticeDraft<boolean>(`${draftKey}:checked`, false);
+  const [attempts, setAttempts] = usePracticeDraft<number>(`${draftKey}:attempts`, 0);
   const check = () => {
     const wrong = items.map((item, index) => (item.isCorrect?.(answers[index] ?? "") ?? answerMatches(answers[index] ?? "", item.answer)) ? "" : item.prompt).filter(Boolean);
     const score = Math.round(((items.length - wrong.length) / items.length) * 100);
@@ -994,10 +1027,10 @@ function AutoPractice({ title, items, guide, placeholder = "写答案", onProgre
   return <div className="panel"><h3>{title}</h3>{guide ? <p className="practice-guide">{guide}</p> : null}{items.map(({ prompt, answer }, index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder={placeholder} />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
-function WordProblemPractice({ items, guide, onProgress }: { items: AutoPracticeItem[]; guide: string; onProgress: (outcome: TaskOutcome) => void }) {
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [checked, setChecked] = useState(false);
-  const [attempts, setAttempts] = useState(0);
+function WordProblemPractice({ items, guide, draftKey, onProgress }: { items: AutoPracticeItem[]; guide: string; draftKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+  const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`${draftKey}:answers`, {});
+  const [checked, setChecked] = usePracticeDraft<boolean>(`${draftKey}:checked`, false);
+  const [attempts, setAttempts] = usePracticeDraft<number>(`${draftKey}:attempts`, 0);
   const changeAnswer = (index: number, value: string) => {
     setAnswers((current) => ({ ...current, [index]: value }));
     setChecked(false);
@@ -1027,14 +1060,14 @@ function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: 
     { prompt: `${first} × ${second} =`, answer: String(first * second) },
     { prompt: `${first * second} ÷ ${first} =`, answer: String(second) },
   ]);
-  return <AutoPractice title="1–6乘法口诀 · 每日10题" onProgress={onProgress} items={items} />;
+  return <AutoPractice title="1–6乘法口诀 · 每日10题" draftKey={`multiply-divide:${dateKey}`} onProgress={onProgress} items={items} />;
 }
 
 function WordProblems({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const offset = (Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000) * 5) % wordProblems.length;
   const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((problem) => ({ prompt: problem.prompt, answer: problem.answer, isCorrect: (input: string) => wordProblemAnswerMatches(input, problem) }));
-  if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" onProgress={onProgress} />;
-  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" items={items} onProgress={onProgress} />;
+  if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" draftKey={`word-problems:${dateKey}`} onProgress={onProgress} />;
+  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" draftKey={`word-problems:${dateKey}`} items={items} onProgress={onProgress} />;
 }
 
 function EnglishDaily({ dateKey }: { dateKey: string }) {
@@ -1059,7 +1092,7 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
         ))}
       </article>
       <EnglishWordReview lesson={lesson} />
-      <EnglishListeningGame lesson={lesson} />
+      <EnglishListeningGame lesson={lesson} dateKey={dateKey} />
       <article className="panel">
         <h3>核心句型</h3>
         <div className="english-patterns">
@@ -1072,7 +1105,7 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
           ))}
         </div>
       </article>
-      <EnglishMeaningQuiz lesson={lesson} />
+      <EnglishMeaningQuiz lesson={lesson} dateKey={dateKey} />
       <article className="panel english-chant">
         <div><p className="eyebrow">玉桂狗节奏秀</p><h3>拍手跟读三遍</h3><p>{lesson.chant}</p></div>
         <button className="secondary" onClick={() => speak(lesson.chant, "en-GB")}><Play size={16} />播放节奏句</button>
@@ -1112,11 +1145,11 @@ function EnglishWordReview({ lesson }: { lesson: ReturnType<typeof getWeeklyCont
   );
 }
 
-function EnglishMeaningQuiz({ lesson }: { lesson: ReturnType<typeof getWeeklyContent>["english"] }) {
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [score, setScore] = useState(0);
-  const [finished, setFinished] = useState(false);
+function EnglishMeaningQuiz({ lesson, dateKey }: { lesson: ReturnType<typeof getWeeklyContent>["english"]; dateKey: string }) {
+  const [index, setIndex] = usePracticeDraft<number>(`english-meaning:${dateKey}:index`, 0);
+  const [selected, setSelected] = usePracticeDraft<string>(`english-meaning:${dateKey}:selected`, "");
+  const [score, setScore] = usePracticeDraft<number>(`english-meaning:${dateKey}:score`, 0);
+  const [finished, setFinished] = usePracticeDraft<boolean>(`english-meaning:${dateKey}:finished`, false);
   const pattern = lesson.patterns[index];
   const options = useMemo(() => {
     const distractors = lesson.patterns.filter((item) => item.sentence !== pattern.sentence).map((item) => item.sentence);
@@ -1150,12 +1183,12 @@ function EnglishMeaningQuiz({ lesson }: { lesson: ReturnType<typeof getWeeklyCon
   );
 }
 
-function EnglishListeningGame({ lesson }: { lesson: ReturnType<typeof getWeeklyContent>["english"] }) {
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [correctCount, setCorrectCount] = useState(0);
-  const [missed, setMissed] = useState(false);
-  const [finished, setFinished] = useState(false);
+function EnglishListeningGame({ lesson, dateKey }: { lesson: ReturnType<typeof getWeeklyContent>["english"]; dateKey: string }) {
+  const [index, setIndex] = usePracticeDraft<number>(`english-listening:${dateKey}:index`, 0);
+  const [selected, setSelected] = usePracticeDraft<string>(`english-listening:${dateKey}:selected`, "");
+  const [correctCount, setCorrectCount] = usePracticeDraft<number>(`english-listening:${dateKey}:score`, 0);
+  const [missed, setMissed] = usePracticeDraft<boolean>(`english-listening:${dateKey}:missed`, false);
+  const [finished, setFinished] = usePracticeDraft<boolean>(`english-listening:${dateKey}:finished`, false);
   const word = lesson.words[index];
   const options = useMemo(() => {
     const distractors = lesson.words.filter((item) => item.word !== word.word).map((item) => item.meaning);
@@ -1197,11 +1230,11 @@ function EnglishListeningGame({ lesson }: { lesson: ReturnType<typeof getWeeklyC
 }
 
 function EnglishSentenceTrain({ lesson, dateKey }: { lesson: ReturnType<typeof getWeeklyContent>["english"]; dateKey: string }) {
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [chosenIds, setChosenIds] = useState<number[]>([]);
-  const [feedback, setFeedback] = useState<"idle" | "retry" | "correct">("idle");
-  const [stars, setStars] = useState(0);
-  const [finished, setFinished] = useState(false);
+  const [roundIndex, setRoundIndex] = usePracticeDraft<number>(`english-sentence:${dateKey}:round`, 0);
+  const [chosenIds, setChosenIds] = usePracticeDraft<number[]>(`english-sentence:${dateKey}:chosen`, []);
+  const [feedback, setFeedback] = usePracticeDraft<"idle" | "retry" | "correct">(`english-sentence:${dateKey}:feedback`, "idle");
+  const [stars, setStars] = usePracticeDraft<number>(`english-sentence:${dateKey}:stars`, 0);
+  const [finished, setFinished] = usePracticeDraft<boolean>(`english-sentence:${dateKey}:finished`, false);
   const pattern = lesson.patterns[roundIndex];
   const tokens = useMemo(() => pattern.sentence.trim().split(/\s+/).map((text, id) => ({ id, text })), [pattern.sentence]);
   const shuffledTokens = useMemo(() => {
@@ -1248,16 +1281,16 @@ function EnglishSentenceTrain({ lesson, dateKey }: { lesson: ReturnType<typeof g
 
 function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const challenges = useMemo(() => getGameChallenges(taskId, dateFromKey(dateKey)), [taskId, dateKey]);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [roundMissed, setRoundMissed] = useState(false);
-  const [roundCorrect, setRoundCorrect] = useState(false);
-  const [firstTryCorrect, setFirstTryCorrect] = useState(0);
-  const [attempts, setAttempts] = useState(0);
-  const [wrongQuestions, setWrongQuestions] = useState<string[]>([]);
-  const [combo, setCombo] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const [finalScore, setFinalScore] = useState(0);
+  const [roundIndex, setRoundIndex] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:round`, 0);
+  const [selected, setSelected] = usePracticeDraft<string>(`game:${taskId}:${dateKey}:selected`, "");
+  const [roundMissed, setRoundMissed] = usePracticeDraft<boolean>(`game:${taskId}:${dateKey}:missed`, false);
+  const [roundCorrect, setRoundCorrect] = usePracticeDraft<boolean>(`game:${taskId}:${dateKey}:correct`, false);
+  const [firstTryCorrect, setFirstTryCorrect] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:first-score`, 0);
+  const [attempts, setAttempts] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:attempts`, 0);
+  const [wrongQuestions, setWrongQuestions] = usePracticeDraft<string[]>(`game:${taskId}:${dateKey}:wrong`, []);
+  const [combo, setCombo] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:combo`, 0);
+  const [finished, setFinished] = usePracticeDraft<boolean>(`game:${taskId}:${dateKey}:finished`, false);
+  const [finalScore, setFinalScore] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:score`, 0);
   const challenge = challenges[roundIndex];
 
   const reset = () => {
@@ -1330,7 +1363,7 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
         </div>
       ) : (
         <>
-          <GameRound key={challenge.question} challenge={challenge} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
+          <GameRound key={challenge.question} challenge={challenge} draftKey={`game-order:${taskId}:${dateKey}:${challenge.question}`} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
           {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：看看画面里的线索。"}</p> : <p className="muted game-feedback">按画面提示完成这一关。</p>}
           {roundCorrect && roundIndex < challenges.length - 1 ? <button className="primary game-next" onClick={nextRound}>下一关 <ArrowLeft className="next-arrow" size={18} /></button> : null}
         </>
@@ -1339,15 +1372,15 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
   );
 }
 
-function GameRound({ challenge, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+function GameRound({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
   if (challenge.kind === "classify") return <div className="game-interaction classify-game"><div className="game-character"><img src={characterImages["my-melody"]} alt="" /><span>{challenge.item}</span></div><p>{challenge.question}</p><div className="game-baskets" role="group" aria-label="汉字分类篮子">{challenge.baskets.map((basket) => <button className={selected === basket ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={basket} onClick={() => onSubmit(basket)}><span>{basket === "人物" ? "人物篮" : basket === "地点" ? "地点篮" : "动作篮"}</span></button>)}</div></div>;
   if (challenge.kind === "number-path") return <div className="game-interaction number-path-game"><p>{challenge.question}</p><div className="number-route">{challenge.path.map((value, index) => <span className={value === null ? "missing" : ""} key={`${value}-${index}`}>{value ?? "?"}</span>)}</div><div className="number-candidates" role="group" aria-label="数字路线候选答案">{challenge.options.map((option) => <button className={selected === String(option) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(String(option))}>{option}</button>)}</div></div>;
   if (challenge.kind === "spot") return <div className="game-interaction spot-game"><p>{challenge.question}</p><div className="spot-grid" role="group" aria-label="找不同九宫格">{challenge.tiles.map((tile, index) => <button aria-label={`第${index + 1}格 ${tile}`} className={selected === String(index) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={`${tile}-${index}`} onClick={() => onSubmit(String(index))}>{tile}</button>)}</div></div>;
-  return <LogicOrderGame challenge={challenge} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
+  return <LogicOrderGame challenge={challenge} draftKey={draftKey} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
 }
 
-function LogicOrderGame({ challenge, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "order" }>; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
-  const [orderedCards, setOrderedCards] = useState<string[]>([]);
+function LogicOrderGame({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "order" }>; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+  const [orderedCards, setOrderedCards] = usePracticeDraft<string[]>(draftKey, []);
   useEffect(() => {
     if (selected && !correct) setOrderedCards([]);
   }, [correct, selected]);
@@ -1358,9 +1391,9 @@ function LogicOrderGame({ challenge, selected, correct, onBegin, onSubmit }: { c
   return <div className="game-interaction order-game"><div className="logic-clue"><img src={characterImages.kuromi} alt="" /><p>{challenge.question}</p></div><div className={correct ? "order-track correct" : "order-track"}>{challenge.correctOrder.map((_, index) => <span key={index}>{orderedCards[index] ?? index + 1}</span>)}</div><div className="order-cards">{challenge.cards.map((card) => <button className="secondary" disabled={correct || orderedCards.includes(card)} key={card} onClick={() => chooseCard(card)}>{card}</button>)}</div><div className="inline-actions"><button className="secondary" disabled={correct || !orderedCards.length} onClick={() => { setOrderedCards([]); onBegin(); }}><RotateCcw size={16} />重新排序</button><button className="primary" disabled={correct || orderedCards.length !== challenge.cards.length} onClick={() => onSubmit(orderedCards.join("|"))}>检查顺序</button></div></div>;
 }
 
-function SportTask({ taskId, onProgress }: { taskId: string; onProgress: (outcome: TaskOutcome) => void }) {
+function SportTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const config = taskId === "sport-rope" ? { title: "跳绳500个", target: 500, unit: "个" } : taskId === "sport-high-jump" ? { title: "摸高跳100个", target: 100, unit: "个" } : { title: "累计运动60分钟", target: 60, unit: "分钟" };
-  const [value, setValue] = useState("");
+  const [value, setValue] = usePracticeDraft<string>(`sport:${taskId}:${dateKey}`, "");
   const ready = Number(value) >= config.target;
   useEffect(() => onProgress({ ready, durationSeconds: taskId === "sport-hour" ? Number(value) * 60 : 0, attempts: 1, wrongQuestions: [], evidence: value ? `填写完成${value}${config.unit}` : undefined, message: ready ? "运动目标达成，可以提交家长审核。" : undefined }), [ready, value, taskId, config.unit, onProgress]);
   return <div className="panel"><h3>{config.title}</h3><p>运动前先热身，完成后提交到今日家长审核。动作不舒服时应立即停止。</p><label>完成数量或时长（{config.unit}）<input className="wide-input" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value.replace(/\D/g, ""))} placeholder={`目标${config.target}${config.unit}`} /></label></div>;
