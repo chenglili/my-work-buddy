@@ -4,7 +4,7 @@ select plan(64);
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
 select is((select cost from public.reward_definitions where id = 'reward-snack'), 80, 'snack costs 80 points');
-select is((select cost from public.reward_definitions where id = 'reward-cartoon-30'), 100, 'cartoon time costs 100 points');
+select is((select cost from public.reward_definitions where id = 'reward-cartoon-30'), 20, 'cartoon time costs 20 points');
 select is((select cost from public.reward_definitions where id = 'reward-toy'), 250, 'toy costs 250 points');
 select is((select completion_mode from public.task_definitions where id = 'english-daily'), 'auto', 'English uses child-confirmed completion');
 select is((select minimum_duration from public.task_definitions where id = 'english-daily'), null::integer, 'English has no timer requirement');

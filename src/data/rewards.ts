@@ -24,7 +24,7 @@ export const shopRewards = [
     name: "动画30分钟",
     description: "由家长安排一次30分钟动画时间。",
     category: "娱乐",
-    costStars: 100,
+    costStars: 20,
     emoji: "📺",
     available: true,
   },
