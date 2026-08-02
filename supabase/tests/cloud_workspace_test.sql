@@ -1,13 +1,13 @@
 begin;
-select plan(57);
+select plan(59);
 
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
 select is((select cost from public.reward_definitions where id = 'reward-snack'), 80, 'snack costs 80 points');
 select is((select cost from public.reward_definitions where id = 'reward-cartoon-30'), 100, 'cartoon time costs 100 points');
 select is((select cost from public.reward_definitions where id = 'reward-toy'), 250, 'toy costs 250 points');
-select is((select completion_mode from public.task_definitions where id = 'english-daily'), 'timer', 'English uses timer completion');
-select is((select minimum_duration from public.task_definitions where id = 'english-daily'), 900, 'English requires fifteen effective minutes');
+select is((select completion_mode from public.task_definitions where id = 'english-daily'), 'auto', 'English uses child-confirmed completion');
+select is((select minimum_duration from public.task_definitions where id = 'english-daily'), null::integer, 'English has no timer requirement');
 select is((select completion_mode from public.task_definitions where id = 'chinese-morning-reading'), 'auto', 'Chinese morning reading uses direct completion');
 select is((select minimum_score from public.task_definitions where id = 'chinese-morning-reading'), 0, 'Chinese morning reading has no score gate');
 select is((select minimum_duration from public.task_definitions where id = 'chinese-morning-reading'), null::integer, 'Chinese morning reading has no duration gate');
@@ -47,8 +47,12 @@ select ok(has_function_privilege('authenticated', 'public.submit_task(uuid,date,
 select hasnt_function('public', 'submit_task', array['uuid', 'date', 'text', 'jsonb'], 'the obsolete same-day submit RPC is removed');
 select ok(position('p_date_key < v_today - 6' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'offline task sync is limited to seven calendar days');
 select ok(position('v_completed_date <> p_date_key' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'offline completion timestamp must match its task date');
+select ok(position('task is not scheduled' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) = 0, 'all point earning tasks can be submitted');
+select ok(position('optional tasks are locked' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) = 0, 'optional point earning tasks are not gated by the daily plan');
 select ok(has_function_privilege('authenticated', 'public.create_pair_code(uuid,text)', 'EXECUTE'), 'parents can create idempotent pairing commands');
 select ok(has_function_privilege('authenticated', 'public.claim_pair_code(uuid,text,text)', 'EXECUTE'), 'anonymous authenticated devices can claim pairing codes');
+select ok(has_function_privilege('authenticated', 'public.create_parent_pair_code(uuid)', 'EXECUTE'), 'parents can create parent device login codes');
+select ok(has_function_privilege('authenticated', 'public.claim_parent_pair_code(uuid,text,text)', 'EXECUTE'), 'anonymous devices can claim parent login codes');
 select ok(position('extensions' in coalesce(array_to_string((select proconfig from pg_proc where oid = 'public.create_pair_code(uuid,text)'::regprocedure), ','), '')) > 0, 'pair code creation can resolve pgcrypto functions');
 select ok(position('extensions' in coalesce(array_to_string((select proconfig from pg_proc where oid = 'public.claim_pair_code(uuid,text,text)'::regprocedure), ','), '')) > 0, 'pair code claiming can resolve pgcrypto functions');
 select ok(has_function_privilege('authenticated', 'public.revoke_child_device(uuid,uuid)', 'EXECUTE'), 'parents can revoke paired devices through the RPC');

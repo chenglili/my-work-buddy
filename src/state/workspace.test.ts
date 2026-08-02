@@ -438,13 +438,13 @@ describe("practice content safeguards", () => {
           expect(challenge.item.length).toBeGreaterThan(0);
           expect(challenge.baskets).toContain(challenge.answer);
         } else if (challenge.kind === "number-path") {
-          expect(challenge.path).toHaveLength(5);
-          expect(challenge.path.at(-1)).toBeNull();
+          expect(challenge.path).toHaveLength(7);
+          expect(challenge.path[4]).toBeNull();
           expect(challenge.options.map(String)).toContain(challenge.answer);
         } else if (challenge.kind === "spot") {
-          expect(challenge.tiles).toHaveLength(9);
+          expect(challenge.tiles).toHaveLength(16);
           expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
-          expect(Number(challenge.answer)).toBeLessThan(9);
+          expect(Number(challenge.answer)).toBeLessThan(16);
         } else {
           expect(challenge.cards).toHaveLength(3);
           expect(new Set(challenge.cards)).toEqual(new Set(challenge.correctOrder));
@@ -453,22 +453,22 @@ describe("practice content safeguards", () => {
       }
       const first = getGameChallenges(taskId, day("2026-08-03"));
       expect(first).toEqual(getGameChallenges(taskId, day("2026-08-03")));
-      expect(first).toHaveLength(5);
-      expect(new Set(first.map((item) => item.question)).size).toBe(5);
+      expect(first).toHaveLength(8);
+      expect(new Set(first.map((item) => item.question)).size).toBe(8);
 
       const weekQuestions = Array.from({ length: 7 }, (_, offset) => {
         const value = day("2026-08-03");
         value.setDate(value.getDate() + offset);
         return getGameChallenges(taskId, value);
       }).flat();
-      expect(new Set(weekQuestions.map((item) => item.question)).size).toBe(35);
+      expect(new Set(weekQuestions.map((item) => item.question)).size).toBe(40);
     }
   });
 
-  it("sets every game to an 80 percent pass score", () => {
+  it("lets every game award points after the full round is played", () => {
     const games = taskCatalog.filter((task) => task.category === "game");
     expect(games).toHaveLength(4);
-    for (const game of games) expect(game.minimumScore).toBe(80);
+    for (const game of games) expect(game.minimumScore).toBe(0);
   });
 
   it("provides 40 age-appropriate integer word problems", () => {

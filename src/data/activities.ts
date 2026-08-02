@@ -15,7 +15,7 @@ export const learningGames = [
     id: "game-math-bubbles",
     title: "口算泡泡",
     subject: "math",
-    description: "在倒计时结束前点破带有正确答案的泡泡。",
+    description: "点破带有正确答案的泡泡。",
     skill: "100以内心算",
     durationMinutes: 5,
     rewardStars: 3,

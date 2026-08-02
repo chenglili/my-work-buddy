@@ -225,9 +225,15 @@ const taskRules: Record<string, Pick<TaskDefinition, "schedule" | "completionMod
   "sport-hour": { schedule: "core", completionMode: "parent", requiresParent: true },
 };
 
-export const taskCatalog: TaskDefinition[] = baseTaskCatalog.map((task) => ({ ...task, ...taskRules[task.id] })).map((task) => task.id === "english-daily"
-  ? { ...task, minutes: "鑷富瀹夋帓", summary: "璇戞灄鐗堜簩涓婁富棰樺惉璇伙紝鍖呭惈鍗曡瘝銆佹牳蹇冨彞鍨嬪拰璺熻浠诲姟锛屾寜鑷繁鐨勮妭濂忓畨鎺掋€?" }
-  : task);
+export const taskCatalog: TaskDefinition[] = baseTaskCatalog.map((task) => ({ ...task, ...taskRules[task.id] }));
+
+const englishTask = taskCatalog.find((task) => task.id === "english-daily");
+if (englishTask) Object.assign(englishTask, {
+  title: "\u82f1\u8bed\u6bcf\u65e5\u542c\u8bfb\u4efb\u52a1",
+  shortTitle: "\u82f1\u8bed\u542c\u8bfb",
+  minutes: "\u81ea\u4e3b\u5b89\u6392",
+  summary: "\u8bd1\u6797\u7248\u4e8c\u5e74\u7ea7\u4e0a\u518c\u4e3b\u9898\u542c\u8bfb\uff0c\u5305\u542b\u5355\u8bcd\u3001\u6838\u5fc3\u53e5\u578b\u548c\u8ddf\u8bfb\u4efb\u52a1\u3002"
+});
 
 const rotatingTaskIds = [
   "chinese-preview-copybook",
@@ -297,10 +303,10 @@ const augustRotationPlan = [
   ["chinese-preview-copybook", "math-multiply-divide", "chinese-reading-comprehension", "chinese-memorize"],
 ];
 
-export const getDailyTaskIds = (value = new Date()) => {
+export const getDailyTaskIds = (value = new Date(), options: { previousDayCompleted?: boolean } = {}) => {
   const sportId = sportTaskIds[dayNumber(value) % sportTaskIds.length];
   const common = ["chinese-morning-reading", "math-arithmetic", "english-daily", "chinese-night-reading", sportId];
-  if (value.getDay() === 0) return common.filter((id) => id !== "math-arithmetic");
+  if (value.getDay() === 0 && !options.previousDayCompleted) return common.filter((id) => id !== "math-arithmetic");
   const schedule = getStudySchedule(value);
   if (schedule.isSummerPlan && value.getMonth() === 7) {
     const unitTasks = augustRotationPlan[schedule.unitIndex];
@@ -639,7 +645,35 @@ export const weeklyContent: WeeklyContent[] = [
   },
 ];
 
-export const getWeeklyContent = (value = new Date()) => weeklyContent[getStudySchedule(value).unitIndex % weeklyContent.length];
+const rotateContent = <T,>(items: T[], offset: number) => [...items.slice(offset), ...items.slice(0, offset)];
+
+export const getWeeklyContent = (value = new Date()) => {
+  const schedule = getStudySchedule(value);
+  const content = weeklyContent[schedule.unitIndex % weeklyContent.length];
+  if (schedule.dayInUnit === 0) return content;
+
+  const wordOffset = schedule.dayInUnit % content.words.length;
+  const dictationOffset = (schedule.dayInUnit * 2) % content.dictation.length;
+  const passageOffset = schedule.dayInUnit % content.memorization.length;
+  const englishWordOffset = schedule.dayInUnit % content.english.words.length;
+  const patternOffset = schedule.dayInUnit % content.english.patterns.length;
+
+  return {
+    ...content,
+    readingTitle: `${content.readingTitle} · ${schedule.stageLabel}`,
+    words: rotateContent(content.words, wordOffset),
+    dictation: rotateContent(content.dictation, dictationOffset),
+    memorization: rotateContent(content.memorization, passageOffset),
+    picture: { ...content.picture, title: `${content.picture.title} · ${schedule.stageLabel}` },
+    english: {
+      ...content.english,
+      title: `${content.english.title} · ${schedule.stageLabel}`,
+      words: rotateContent(content.english.words, englishWordOffset),
+      patterns: rotateContent(content.english.patterns, patternOffset),
+      tasks: rotateContent(content.english.tasks, schedule.dayInUnit % content.english.tasks.length),
+    },
+  };
+};
 
 const problemObjects = [
   { item: "贴纸", unit: "张" },
@@ -779,6 +813,20 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "order", question: `${first}有8颗星，${second}有6颗，${third}有5颗。请从多到少排序`, cards, correctOrder, answer: correctOrder.join("|") };
   }),
 };
+
+gameQuestionBanks["game-number"] = gameQuestionBanks["game-number"].map((challenge) => {
+  if (challenge.kind !== "number-path") return challenge;
+  const known = challenge.path.filter((value): value is number => value !== null);
+  const step = known[1] - known[0];
+  const answer = Number(challenge.answer);
+  return { ...challenge, path: [...known.slice(0, 4), null, answer + step, answer + step * 2] };
+});
+
+gameQuestionBanks["game-spot"] = gameQuestionBanks["game-spot"].map((challenge) => {
+  if (challenge.kind !== "spot") return challenge;
+  const sameTile = challenge.tiles.find((tile, index) => String(index) !== challenge.answer) ?? challenge.tiles[0];
+  return { ...challenge, tiles: [...challenge.tiles, ...Array.from({ length: 7 }, () => sameTile)] };
+});
 
 export const getGameChallenge = (taskId: string, value = new Date()) => {
   return getGameChallenges(taskId, value, 1)[0];

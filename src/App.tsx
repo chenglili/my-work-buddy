@@ -57,6 +57,7 @@ import {
   calculateStreak,
   completeTask,
   dailyParentPin,
+  dateKey,
   fulfillReward,
   getDailyReport,
   getMonthlyReport,
@@ -268,7 +269,8 @@ export default function App() {
   }, [route.view, route.taskId]);
 
   const currentDate = dateFromKey(state.dateKey);
-  const requiredTaskIds = getDailyTaskIds(currentDate);
+  const previousDateKey = dateKey(new Date(currentDate.getTime() - 86_400_000));
+  const requiredTaskIds = getDailyTaskIds(currentDate, { previousDayCompleted: state.completedDates.includes(previousDateKey) });
   const completedTaskIds = completedTaskIdsForToday(state);
   const readyTaskIds = new Set([...completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
   const completedRequired = requiredTaskIds.filter((id) => readyTaskIds.has(id)).length;
@@ -848,7 +850,7 @@ function legacySpeak(text: string, lang = "zh-CN") {
 
 function MorningReading({ dateKey }: { dateKey: string }) {
   const content = getWeeklyContent(dateFromKey(dateKey));
-  const poem = chineseReadings[Math.floor(dateFromKey(dateKey).getDate() / 7) % chineseReadings.length];
+  const poem = chineseReadings[(dateFromKey(dateKey).getDate() - 1) % chineseReadings.length];
   return (
     <div className="panel-list">
       <div className="content-grid">
