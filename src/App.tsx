@@ -190,12 +190,26 @@ export default function App() {
   const previousCloudBonus = useRef<boolean | null>(null);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
+    if (workspace.enabled && workspace.mode !== "ready") return;
+    const refreshToday = () => {
       workspace.refreshLocalDate();
       if (workspace.enabled) void workspace.refresh();
-    }, 60_000);
-    return () => window.clearInterval(id);
-  }, [workspace.enabled, workspace.refresh, workspace.refreshLocalDate]);
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshToday();
+    };
+    refreshToday();
+    const id = window.setInterval(refreshToday, 60_000);
+    window.addEventListener("focus", refreshToday);
+    window.addEventListener("pageshow", refreshToday);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", refreshToday);
+      window.removeEventListener("pageshow", refreshToday);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [workspace.enabled, workspace.mode, workspace.refresh, workspace.refreshLocalDate]);
 
   useEffect(() => {
     setParentSession((current) => current?.dateKey === state.dateKey ? current : null);

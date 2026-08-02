@@ -74,6 +74,8 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   const [userEmail, setUserEmail] = useState("");
   const [legacyPreview, setLegacyPreview] = useState<LegacyImportPreview | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const payloadRef = useRef<CloudWorkspacePayload | null>(null);
   const activeDateKeyRef = useRef(state.dateKey);
   const flushingRef = useRef(false);
@@ -433,9 +435,11 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
   }, [refreshFromCloud, restoreSession]);
 
   const refreshLocalDate = useCallback(() => {
-    const next = refreshDailyState(state);
-    if (next === state) return;
+    const currentState = stateRef.current;
+    const next = refreshDailyState(currentState);
+    if (next === currentState) return;
     activeDateKeyRef.current = next.dateKey;
+    stateRef.current = next;
     setState(next);
     const session = sessionRef.current;
     const currentPayload = payloadRef.current;
@@ -446,7 +450,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       void saveCloudSnapshot(session.user.id, nextPayload);
       void refreshPendingTaskIds(session.user.id);
     }
-  }, [refreshPendingTaskIds, state]);
+  }, [refreshPendingTaskIds]);
 
   const confirmLegacyImport = useCallback(async () => {
     const session = sessionRef.current;
@@ -496,7 +500,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       await removeTaskCommand(queued.commandId);
       await refreshPendingTaskIds(session.user.id);
       await refreshFromCloud();
-      throw submitError;
+      throw submitError instanceof Error ? submitError : new Error(errorMessage(submitError));
     }
   }, [flushOutbox, invokeNotification, payload, refreshFromCloud, refreshPendingTaskIds, state.dateKey, syncQueuedCommand]);
 
