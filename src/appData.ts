@@ -346,7 +346,7 @@ export const sectionMeta: Record<ViewKey, { label: string; mobileLabel: string; 
   english: { label: "英语专区", mobileLabel: "英语", character: "cinnamoroll", navIcon: "characters/cinnamoroll.png" },
   game: { label: "益智游戏", mobileLabel: "游戏", character: "kuromi", navIcon: "characters/keroppi.svg" },
   sport: { label: "运动锻炼", mobileLabel: "运动", character: "hello-kitty", navIcon: "characters/pochacco.svg" },
-  science: { label: "趣味科普", mobileLabel: "科普", character: "cinnamoroll", navIcon: "app-icon.svg" },
+  science: { label: "趣味科普", mobileLabel: "科普", character: "cinnamoroll", navIcon: "pets/sun-conure-main.jpg" },
   pet: { label: "嘟嘟小屋", mobileLabel: "宠物", character: "hello-kitty", navIcon: "pets/sun-conure-avatar-256.webp" },
   shop: { label: "积分商店", mobileLabel: "商店", character: "my-melody", navIcon: "characters/pompompurin.svg" },
 };

@@ -106,6 +106,12 @@ button:disabled {
   object-fit: cover;
 }
 
+.nav-icon-image.nav-icon-science {
+  justify-self: center;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .nav-mobile-label {
   display: none;
 }

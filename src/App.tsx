@@ -400,7 +400,7 @@ export default function App() {
         <nav>
           {sectionKeys.map((key) => (
             <button key={key} aria-label={sectionMeta[key].label} className={route.view === key && !route.taskId ? "active" : ""} onClick={() => navigate(key)}>
-              <img className={`nav-icon-image${key === "english" ? " nav-icon-english" : ""}${key === "pet" ? " nav-icon-pet" : ""}`} src={sectionMeta[key].navIcon} alt="" />
+              <img className={`nav-icon-image${key === "english" ? " nav-icon-english" : ""}${key === "pet" ? " nav-icon-pet" : ""}${key === "science" ? " nav-icon-science" : ""}`} src={sectionMeta[key].navIcon} alt="" />
               <span className="nav-label">{sectionMeta[key].label}</span>
               <span className="nav-mobile-label">{sectionMeta[key].mobileLabel}</span>
             </button>
@@ -946,9 +946,9 @@ function SciencePage({ dateKey }: { dateKey: string }) {
           <button className="secondary" type="button" onClick={playDialogue}><Play size={17} />播放台词</button>
         </div>
         <div className="science-live-line" aria-live="polite" aria-atomic="true"><strong>{activePanel.characterName}：</strong>{activePanel.dialogue}</div>
-        <div className="science-panel-grid" role="list" aria-label="今日科普漫画分格">
+        <div className="science-panel-grid" aria-label="今日科普漫画分格">
           {episode.panels.map((panel, index) => (
-            <button className={`science-panel${index === activeIndex ? " is-active" : ""}`} type="button" role="listitem" aria-pressed={index === activeIndex} key={panel.id} onClick={() => setActiveIndex(index)}>
+            <button className={`science-panel${index === activeIndex ? " is-active" : ""}`} type="button" aria-pressed={index === activeIndex} key={panel.id} onClick={() => setActiveIndex(index)}>
               <span className="science-panel-number">{index + 1}</span>
               <span className="science-panel-art"><img src={characterImages[panel.character]} alt={`${panel.characterName}漫画角色`} /></span>
               <span className="science-speech-bubble">{panel.dialogue}</span>
