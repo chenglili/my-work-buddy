@@ -165,12 +165,12 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
   {
     id: "game-logic",
     category: "game",
-    title: "逻辑推理小游戏",
-    shortTitle: "逻辑推理",
+    title: "宝藏密码",
+    shortTitle: "宝藏密码",
     points: 3,
     minutes: "5分钟",
     character: "cinnamoroll",
-    summary: "根据线索判断顺序和对应关系。",
+    summary: "观察图形重复规律，找出宝藏密码中的缺少图案。",
   },
   {
     id: "sport-rope",
@@ -802,13 +802,13 @@ export interface SpotGameChallenge extends GameChallengeBase {
   tiles: string[];
 }
 
-export interface OrderGameChallenge extends GameChallengeBase {
-  kind: "order";
-  cards: string[];
-  correctOrder: string[];
+export interface PatternGameChallenge extends GameChallengeBase {
+  kind: "pattern";
+  sequence: Array<string | null>;
+  options: string[];
 }
 
-export type GameChallenge = ClassifyGameChallenge | NumberPathGameChallenge | SpotGameChallenge | OrderGameChallenge;
+export type GameChallenge = ClassifyGameChallenge | NumberPathGameChallenge | SpotGameChallenge | PatternGameChallenge;
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
@@ -842,17 +842,20 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "spot", question: `九宫格第${index + 1}关：找出不同的图案`, tiles, answer: String(position) };
   }),
   "game-logic": Array.from({ length: 40 }, (_, index) => {
-    const offset = index % names.length;
-    const first = names[offset];
-    const second = names[(offset + 1) % names.length];
-    const third = names[(offset + 2) % names.length];
-    const group = Math.floor(index / names.length);
-    const correctOrder = [first, second, third];
-    const cards = [third, first, second];
-    if (group === 0) return { kind: "order", question: `${first}比${second}高，${second}比${third}高。请从高到矮排序`, cards, correctOrder, answer: correctOrder.join("|") };
-    if (group === 1) return { kind: "order", question: `${first}比${second}早到，${second}比${third}早到。请从早到晚排序`, cards, correctOrder, answer: correctOrder.join("|") };
-    if (group === 2) return { kind: "order", question: `排队时，${second}在${first}后面，${third}在${second}后面。请从前到后排序`, cards, correctOrder, answer: correctOrder.join("|") };
-    return { kind: "order", question: `${first}有8颗星，${second}有6颗，${third}有5颗。请从多到少排序`, cards, correctOrder, answer: correctOrder.join("|") };
+    const symbols = ["★", "●", "▲", "◆", "♥", "☀", "■", "◇"];
+    const first = symbols[index % symbols.length];
+    const second = symbols[(index + 1) % symbols.length];
+    const third = symbols[(index + 2) % symbols.length];
+    const template = index % 4;
+    const sequence = template === 0
+      ? [first, second, first, second, null, second]
+      : template === 1
+        ? [first, first, second, first, null, second]
+        : template === 2
+          ? [first, second, third, first, null, third]
+          : [first, second, second, first, null, second];
+    const answer = template === 2 ? third : template === 3 ? first : template === 1 ? second : first;
+    return { kind: "pattern", question: `宝藏密码：找出第${index + 1}关问号里的图案`, sequence, options: [first, second, third], answer };
   }),
 };
 

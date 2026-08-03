@@ -513,7 +513,7 @@ describe("practice content safeguards", () => {
       "game-hanzi": "classify",
       "game-number": "number-path",
       "game-spot": "spot",
-      "game-logic": "order",
+      "game-logic": "pattern",
     } as const;
     for (const [taskId, bank] of Object.entries(gameQuestionBanks)) {
       expect(bank.length).toBeGreaterThanOrEqual(40);
@@ -531,9 +531,10 @@ describe("practice content safeguards", () => {
           expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
           expect(Number(challenge.answer)).toBeLessThan(16);
         } else {
-          expect(challenge.cards).toHaveLength(3);
-          expect(new Set(challenge.cards)).toEqual(new Set(challenge.correctOrder));
-          expect(challenge.answer).toBe(challenge.correctOrder.join("|"));
+          expect(challenge.sequence).toHaveLength(6);
+          expect(challenge.sequence[4]).toBeNull();
+          expect(challenge.options).toHaveLength(3);
+          expect(challenge.options).toContain(challenge.answer);
         }
       }
       const first = getGameChallenges(taskId, day("2026-08-03"));

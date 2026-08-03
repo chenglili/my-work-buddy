@@ -1405,7 +1405,7 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
         </div>
       ) : (
         <>
-          <GameRound key={challenge.question} challenge={challenge} draftKey={`game-order:${taskId}:${dateKey}:${challenge.question}`} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
+          <GameRound key={challenge.question} challenge={challenge} selected={selected} correct={roundCorrect} onSubmit={choose} />
           {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：看看画面里的线索。"}</p> : <p className="muted game-feedback">按画面提示完成这一关。</p>}
           {roundCorrect && roundIndex < challenges.length - 1 ? <button className="primary game-next" onClick={nextRound}>下一关 <ArrowLeft className="next-arrow" size={18} /></button> : null}
         </>
@@ -1414,23 +1414,12 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
   );
 }
 
-function GameRound({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+function GameRound({ challenge, selected, correct, onSubmit }: { challenge: GameChallenge; selected: string; correct: boolean; onSubmit: (answer: string) => void }) {
   if (challenge.kind === "classify") return <div className="game-interaction classify-game"><div className="game-character"><img src={characterImages["my-melody"]} alt="" /><span>{challenge.item}</span></div><p>{challenge.question}</p><div className="game-baskets" role="group" aria-label="汉字分类篮子">{challenge.baskets.map((basket) => <button className={selected === basket ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={basket} onClick={() => onSubmit(basket)}><span>{basket === "人物" ? "人物篮" : basket === "地点" ? "地点篮" : "动作篮"}</span></button>)}</div></div>;
   if (challenge.kind === "number-path") return <div className="game-interaction number-path-game"><p>{challenge.question}</p><div className="number-route">{challenge.path.map((value, index) => <span className={value === null ? "missing" : ""} key={`${value}-${index}`}>{value ?? "?"}</span>)}</div><div className="number-candidates" role="group" aria-label="数字路线候选答案">{challenge.options.map((option) => <button className={selected === String(option) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(String(option))}>{option}</button>)}</div></div>;
   if (challenge.kind === "spot") return <div className="game-interaction spot-game"><p>{challenge.question}</p><div className="spot-grid" role="group" aria-label="找不同九宫格">{challenge.tiles.map((tile, index) => <button aria-label={`第${index + 1}格 ${tile}`} className={selected === String(index) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={`${tile}-${index}`} onClick={() => onSubmit(String(index))}>{tile}</button>)}</div></div>;
-  return <LogicOrderGame challenge={challenge} draftKey={draftKey} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
-}
-
-function LogicOrderGame({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "order" }>; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
-  const [orderedCards, setOrderedCards] = usePracticeDraft<string[]>(draftKey, []);
-  useEffect(() => {
-    if (selected && !correct) setOrderedCards([]);
-  }, [correct, selected]);
-  const chooseCard = (card: string) => {
-    if (!orderedCards.length) onBegin();
-    setOrderedCards((cards) => [...cards, card]);
-  };
-  return <div className="game-interaction order-game"><div className="logic-clue"><img src={characterImages.kuromi} alt="" /><p>{challenge.question}</p></div><div className={correct ? "order-track correct" : "order-track"}>{challenge.correctOrder.map((_, index) => <span key={index}>{orderedCards[index] ?? index + 1}</span>)}</div><div className="order-cards">{challenge.cards.map((card) => <button className="secondary" disabled={correct || orderedCards.includes(card)} key={card} onClick={() => chooseCard(card)}>{card}</button>)}</div><div className="inline-actions"><button className="secondary" disabled={correct || !orderedCards.length} onClick={() => { setOrderedCards([]); onBegin(); }}><RotateCcw size={16} />重新排序</button><button className="primary" disabled={correct || orderedCards.length !== challenge.cards.length} onClick={() => onSubmit(orderedCards.join("|"))}>检查顺序</button></div></div>;
+  if (challenge.kind === "pattern") return <div className="game-interaction pattern-game"><div className="logic-clue"><img src={characterImages.cinnamoroll} alt="" /><p>{challenge.question}</p></div><div className="pattern-sequence" aria-label="宝藏密码图案序列">{challenge.sequence.map((symbol, index) => <span className={symbol === null ? "missing" : ""} key={index}>{symbol ?? "?"}</span>)}</div><div className="pattern-options" role="group" aria-label="宝藏密码候选图案">{challenge.options.map((option) => <button className={selected === option ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(option)}>{option}</button>)}</div></div>;
+  return null;
 }
 
 function SportTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
