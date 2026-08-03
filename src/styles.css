@@ -414,14 +414,19 @@ button {
   scroll-margin-top: 150px;
 }
 
+.task-card-color-0 { background: #fff1f5; }
+.task-card-color-1 { background: #fff6df; }
+.task-card-color-2 { background: #eaf8f4; }
+.task-card-color-3 { background: #edf5ff; }
+.task-card-color-4 { background: #f4efff; }
+.task-card-color-5 { background: #fff0e5; }
+
 .task-card.completed {
   border-color: #78c6a3;
-  background: #f4fff9;
 }
 
 .task-card.pending {
   border-color: #e9c56b;
-  background: #fffaf0;
 }
 
 .task-card > img {

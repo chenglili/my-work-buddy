@@ -702,13 +702,13 @@ function SubjectDashboard({ view, dateKey, tasks, completedIds }: { view: "chine
 function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTaskIds, onOpenTask }: { tasks: TaskDefinition[]; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; onOpenTask: (taskId: string) => void }) {
   return (
     <div className="task-grid">
-      {tasks.map((task) => {
+      {tasks.map((task, index) => {
         const completed = completedIds.includes(task.id);
         const pending = pendingIds.includes(task.id);
         const syncPending = syncPendingIds.includes(task.id);
         const required = requiredTaskIds.includes(task.id);
         return (
-          <article className={completed ? "task-card completed" : pending || syncPending ? "task-card pending" : "task-card"} key={task.id} data-task-id={task.id}>
+          <article className={`${completed ? "task-card completed" : pending || syncPending ? "task-card pending" : "task-card"} task-card-color-${index % 6}`} key={task.id} data-task-id={task.id}>
             <img src={characterImages[task.character]} alt="" />
             <div>
               <p className="task-meta">{syncPending ? "待同步" : pending ? "待家长审核" : required ? "今日必做" : task.schedule === "optional" ? "奖励任务" : "本周轮换"} · {task.minutes} · +{task.points}</p>
