@@ -610,6 +610,11 @@ export const calculateStreak = (completedDates: string[], today = new Date(), da
 
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
 
+const fullCompletionDates = (state: WorkspaceState) => new Set([
+  ...state.completedDates,
+  ...state.pointRecords.filter((record) => record.reason === 'daily_bonus').map((record) => record.dateKey),
+]);
+
 const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoints: number, rewardRequests: RewardRequest[]) => {
   const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && (result.firstScore ?? result.score) !== undefined);
   const arithmeticAverage = arithmeticResults.length
@@ -629,9 +634,10 @@ const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoi
 
 export const getDailyReport = (state: WorkspaceState, today = new Date()) => {
   const currentDay = dateKey(today);
+  const completedDates = fullCompletionDates(state);
   return summarizeReport(
     state.taskResults.filter((result) => result.dateKey === currentDay),
-    state.completedDates.includes(currentDay) ? 1 : 0,
+    completedDates.has(currentDay) ? 1 : 0,
     state.dailyEarnedPoints[currentDay] ?? 0,
     state.rewardRequests.filter((request) => request.requestedAt.slice(0, 10) === currentDay),
   );
@@ -639,9 +645,10 @@ export const getDailyReport = (state: WorkspaceState, today = new Date()) => {
 
 export const getWeeklyReport = (state: WorkspaceState, today = new Date()) => {
   const currentWeek = weekKey(today);
+  const completedDates = fullCompletionDates(state);
   return summarizeReport(
     state.taskResults.filter((result) => weekKey(new Date(`${result.dateKey}T12:00:00`)) === currentWeek),
-    state.completedDates.filter((value) => weekKey(new Date(`${value}T12:00:00`)) === currentWeek).length,
+    [...completedDates].filter((value) => weekKey(new Date(`${value}T12:00:00`)) === currentWeek).length,
     state.weeklyPoints[currentWeek] ?? 0,
     state.rewardRequests.filter((request) => weekKey(new Date(request.requestedAt)) === currentWeek),
   );
@@ -649,9 +656,10 @@ export const getWeeklyReport = (state: WorkspaceState, today = new Date()) => {
 
 export const getMonthlyReport = (state: WorkspaceState, today = new Date()) => {
   const currentMonth = dateKey(today).slice(0, 7);
+  const completedDates = fullCompletionDates(state);
   return summarizeReport(
     state.taskResults.filter((result) => result.dateKey.startsWith(currentMonth)),
-    state.completedDates.filter((value) => value.startsWith(currentMonth)).length,
+    [...completedDates].filter((value) => value.startsWith(currentMonth)).length,
     Object.entries(state.dailyEarnedPoints).filter(([value]) => value.startsWith(currentMonth)).reduce((sum, [, points]) => sum + points, 0),
     state.rewardRequests.filter((request) => request.requestedAt.startsWith(currentMonth)),
   );

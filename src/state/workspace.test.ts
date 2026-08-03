@@ -245,6 +245,26 @@ describe("workspace state", () => {
     expect(getMonthlyReport(secondDay, augustSecond)).toMatchObject({ taskCount: 2, completedDays: 2, earnedPoints: 40, arithmeticAverage: 85 });
     expect(getMonthlyReport(secondDay, augustSecond).wrongQuestions).toEqual(["36 + 17 ="]);
   });
+
+  it("counts full check-in days from daily bonus records when date history is missing", () => {
+    const today = day("2026-08-03");
+    const state = {
+      ...initialWorkspaceState(today),
+      completedDates: [],
+      pointRecords: [{
+        id: "bonus-2026-08-03",
+        dateKey: "2026-08-03",
+        delta: 15,
+        reason: "daily_bonus" as const,
+        sourceKey: "daily-bonus:2026-08-03",
+        createdAt: "2026-08-03T12:00:00.000Z",
+      }],
+    };
+
+    expect(getDailyReport(state, today).completedDays).toBe(1);
+    expect(getWeeklyReport(state, today).completedDays).toBe(1);
+    expect(getMonthlyReport(state, today).completedDays).toBe(1);
+  });
 });
 
 describe("pet care", () => {
