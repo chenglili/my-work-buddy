@@ -375,7 +375,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "校园新生活",
     readingTitle: "清晨的校园",
-    readingText: "清晨，校园里吹来凉凉的风。银杏叶像金色的小扇子，同学们背着书包，笑着走进教室。",
+    readingText: "清晨，校园里吹来凉凉的风。银杏叶像金色的小扇子，在枝头轻轻摇晃。同学们背着书包，和老师互相问好，笑着走进教室。值日生打开窗户，教室里很快充满了明亮的阳光。",
     words: [
       { word: "园", pinyin: "yuán", strokes: "先外后内再封口", group: "校园、花园" },
       { word: "队", pinyin: "duì", strokes: "左窄右宽，撇捺舒展", group: "队伍、排队" },
@@ -409,7 +409,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "秋天来了",
     readingTitle: "秋天的颜色",
-    readingText: "秋风轻轻吹，稻田变成金黄色，枫叶换上红衣裳。果园里，苹果露出了圆圆的笑脸。",
+    readingText: "秋风轻轻吹，稻田变成金黄色，像铺开了一大片地毯。枫叶换上红衣裳，随着风儿在空中转圈。果园里，苹果露出了圆圆的笑脸，葡萄也一串串挂在架子上。小朋友们观察秋天的颜色，把看到的变化记录在本子上。",
     words: [
       { word: "秋", pinyin: "qiū", strokes: "左右结构，禾木旁略窄", group: "秋天、秋风" },
       { word: "黄", pinyin: "huáng", strokes: "横画均匀，中间写紧凑", group: "黄色、金黄" },
@@ -443,7 +443,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "动物朋友",
     readingTitle: "小松鼠存松果",
-    readingText: "小松鼠在树林里找到许多松果。它把松果一个个搬回树洞，准备在寒冷的冬天慢慢享用。",
+    readingText: "小松鼠在树林里找到许多松果。它先把松果放在树根旁，再一个个搬回树洞。路上遇到小伙伴时，它还停下来分享了一颗最大的松果。忙了一整天，树洞里的食物越来越多，它准备在寒冷的冬天慢慢享用。",
     words: [
       { word: "松", pinyin: "sōng", strokes: "木字旁窄，公字舒展", group: "松树、松果" },
       { word: "熊", pinyin: "xióng", strokes: "上紧下宽，四点底均匀", group: "熊猫、小熊" },
@@ -477,7 +477,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "美丽家乡",
     readingTitle: "小桥流水",
-    readingText: "家乡有一座弯弯的小桥，桥下的河水清清的。早晨，白鹭站在浅水里，安静地寻找小鱼。",
+    readingText: "家乡有一座弯弯的小桥，桥下的河水清清的。小桥旁长着几棵柳树，风一吹，长长的枝条就碰到水面。早晨，白鹭站在浅水里，安静地寻找小鱼。放学以后，孩子们从桥上走过，听见河水唱着轻轻的歌。",
     words: [
       { word: "桥", pinyin: "qiáo", strokes: "左窄右宽，乔字写紧凑", group: "小桥、石桥" },
       { word: "河", pinyin: "hé", strokes: "三点水呈弧形，可字写正", group: "河水、小河" },
@@ -511,7 +511,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "冬日童话",
     readingTitle: "第一场雪",
-    readingText: "雪花从天空慢慢飘下来，屋顶和树枝都变白了。孩子们戴上手套，在雪地里留下了一串串脚印。",
+    readingText: "雪花从天空慢慢飘下来，屋顶和树枝都变白了。小鸟在雪地上跳了几步，留下细小的脚印。孩子们戴上手套，堆了一个圆滚滚的雪人，还给它围上红围巾。回家时，大家约好明天再来看看雪人的新帽子。",
     words: [
       { word: "雪", pinyin: "xuě", strokes: "雨字头写宽，下面写紧凑", group: "下雪、雪花" },
       { word: "冬", pinyin: "dōng", strokes: "撇捺舒展，两点上下对齐", group: "冬天、冬日" },
@@ -545,7 +545,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "我爱劳动",
     readingTitle: "整理小能手",
-    readingText: "写完作业，小文把铅笔放进笔袋，把书本分层摆好，还擦干净了自己的小书桌。",
+    readingText: "写完作业，小文先检查了每一道题，把写错的地方认真改好。接着，她把铅笔放进笔袋，把书本按课程分层摆好，还擦干净了自己的小书桌。妈妈看见后夸她做事有条理。小文发现，整理好房间以后，第二天找东西方便多了。",
     words: [
       { word: "劳", pinyin: "láo", strokes: "上中下结构，横钩写稳", group: "劳动、辛劳" },
       { word: "桌", pinyin: "zhuō", strokes: "上窄下宽，木字托住上部", group: "书桌、桌子" },
@@ -579,7 +579,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "科学发现",
     readingTitle: "影子去哪儿",
-    readingText: "早晨，影子长长的；中午，影子变短了。原来太阳在天空中的位置不同，影子的方向和长短也会变化。",
+    readingText: "早晨，太阳刚刚升起，小树的影子长长的，伸到了小路边。中午，太阳升得高了，影子变得短短的，藏在树脚下。下午，影子又慢慢变长，方向也和早晨不一样。原来太阳在天空中的位置不同，影子的方向和长短也会变化。",
     words: [
       { word: "影", pinyin: "yǐng", strokes: "左右结构，三撇方向一致", group: "影子、电影" },
       { word: "观", pinyin: "guān", strokes: "左右等高，见字竖弯钩舒展", group: "观察、观看" },
@@ -613,7 +613,7 @@ export const weeklyContent: WeeklyContent[] = [
   {
     theme: "快乐成长",
     readingTitle: "我的小目标",
-    readingText: "新的一周开始了，我给自己定下一个小目标：认真读书，按时运动，每天比昨天进步一点点。",
+    readingText: "新的一周开始了，我给自己定下一个小目标：认真读书，按时运动，每天比昨天进步一点点。我把目标写在小卡片上，放在书桌最显眼的地方。完成晨读后，我就在卡片上画一颗星；运动结束后，再给自己一个大大的勾。只要每天坚持一点点，小目标就会慢慢变成好习惯。",
     words: [
       { word: "目", pinyin: "mù", strokes: "先外后内再封口，横画均匀", group: "目标、目光" },
       { word: "标", pinyin: "biāo", strokes: "左窄右宽，示字两点呼应", group: "目标、标准" },
