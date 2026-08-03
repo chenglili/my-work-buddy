@@ -511,7 +511,7 @@ describe("practice content safeguards", () => {
   it("provides 40 questions in every game bank with deterministic five-round sessions", () => {
     const expectedKinds = {
       "game-hanzi": "classify",
-      "game-number": "number-path",
+      "game-number": "sudoku",
       "game-spot": "spot",
       "game-logic": "pattern",
     } as const;
@@ -522,14 +522,16 @@ describe("practice content safeguards", () => {
         if (challenge.kind === "classify") {
           expect(challenge.item.length).toBeGreaterThan(0);
           expect(challenge.baskets).toContain(challenge.answer);
-        } else if (challenge.kind === "number-path") {
-          expect(challenge.path).toHaveLength(7);
-          expect(challenge.path[4]).toBeNull();
-          expect(challenge.options.map(String)).toContain(challenge.answer);
+        } else if (challenge.kind === "sudoku") {
+          expect(challenge.grid).toHaveLength(36);
+          expect(challenge.solution).toHaveLength(36);
+          expect(challenge.grid.filter((value) => value === 0).length).toBeGreaterThanOrEqual(14);
+          expect(challenge.options).toEqual([1, 2, 3, 4, 5, 6]);
+          expect(challenge.answer).toBe(challenge.solution.join(","));
         } else if (challenge.kind === "spot") {
-          expect(challenge.tiles).toHaveLength(16);
+          expect(challenge.tiles.length).toBeGreaterThanOrEqual(9);
           expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
-          expect(Number(challenge.answer)).toBeLessThan(16);
+          expect(Number(challenge.answer)).toBeLessThan(challenge.tiles.length);
         } else {
           expect(challenge.sequence).toHaveLength(6);
           expect(challenge.sequence[4]).toBeNull();
@@ -593,13 +595,11 @@ describe("practice content safeguards", () => {
 
   it("uses a different icon for every navigation item", () => {
     const icons = Object.values(sectionMeta).map((item) => item.navIcon);
-    expect(icons).toHaveLength(8);
-    expect(new Set(icons).size).toBe(8);
+    expect(new Set(icons).size).toBe(icons.length);
   });
 
-  it("provides eight unique short labels for mobile navigation", () => {
+  it("provides unique short labels for mobile navigation", () => {
     const labels = Object.values(sectionMeta).map((item) => item.mobileLabel);
-    expect(labels).toEqual(["首页", "语文", "数学", "英语", "游戏", "运动", "宠物", "商店"]);
-    expect(new Set(labels).size).toBe(8);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });

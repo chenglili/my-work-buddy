@@ -4,3 +4,4 @@ export * from "./dailyTasks";
 export * from "./english";
 export * from "./math";
 export * from "./rewards";
+export * from "./science";

@@ -1,5 +1,5 @@
 export type TaskCategory = "chinese" | "math" | "english" | "game" | "sport";
-export type ViewKey = "home" | TaskCategory | "pet" | "shop";
+export type ViewKey = "home" | TaskCategory | "science" | "pet" | "shop";
 export type TaskSchedule = "core" | "rotation" | "optional";
 export type CompletionMode = "auto" | "timer" | "parent";
 
@@ -145,12 +145,12 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
   {
     id: "game-number",
     category: "game",
-    title: "数字解谜",
-    shortTitle: "数字解谜",
+    title: "6×6数独挑战",
+    shortTitle: "6×6数独",
     points: 3,
     minutes: "5分钟",
     character: "kuromi",
-    summary: "观察数字规律，选出下一步。",
+    summary: "在6×6数独中补齐数字，每行、每列和每个小宫都不能重复。",
   },
   {
     id: "game-spot",
@@ -346,6 +346,7 @@ export const sectionMeta: Record<ViewKey, { label: string; mobileLabel: string; 
   english: { label: "英语专区", mobileLabel: "英语", character: "cinnamoroll", navIcon: "characters/cinnamoroll.png" },
   game: { label: "益智游戏", mobileLabel: "游戏", character: "kuromi", navIcon: "characters/keroppi.svg" },
   sport: { label: "运动锻炼", mobileLabel: "运动", character: "hello-kitty", navIcon: "characters/pochacco.svg" },
+  science: { label: "趣味科普", mobileLabel: "科普", character: "cinnamoroll", navIcon: "app-icon.svg" },
   pet: { label: "嘟嘟小屋", mobileLabel: "宠物", character: "hello-kitty", navIcon: "pets/sun-conure-avatar-256.webp" },
   shop: { label: "积分商店", mobileLabel: "商店", character: "my-melody", navIcon: "characters/pompompurin.svg" },
 };
@@ -791,9 +792,10 @@ export interface ClassifyGameChallenge extends GameChallengeBase {
   baskets: string[];
 }
 
-export interface NumberPathGameChallenge extends GameChallengeBase {
-  kind: "number-path";
-  path: Array<number | null>;
+export interface SudokuGameChallenge extends GameChallengeBase {
+  kind: "sudoku";
+  grid: number[];
+  solution: number[];
   options: number[];
 }
 
@@ -808,7 +810,7 @@ export interface PatternGameChallenge extends GameChallengeBase {
   options: string[];
 }
 
-export type GameChallenge = ClassifyGameChallenge | NumberPathGameChallenge | SpotGameChallenge | PatternGameChallenge;
+export type GameChallenge = ClassifyGameChallenge | SudokuGameChallenge | SpotGameChallenge | PatternGameChallenge;
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
@@ -830,10 +832,15 @@ const spotPairs = [
 export const gameQuestionBanks: Record<string, GameChallenge[]> = {
   "game-hanzi": hanziItems.map(([word, answer]) => ({ kind: "classify", question: `把“${word}”放进正确的篮子`, item: word, baskets: ["人物", "地点", "动作"], answer })),
   "game-number": Array.from({ length: 40 }, (_, index) => {
-    const start = 1 + (index % 8);
-    const step = 2 + Math.floor(index / 8);
-    const answer = start + step * 4;
-    return { kind: "number-path", question: `从${start}出发，沿着每次加${step}的路线找到下一站`, path: [start, start + step, start + step * 2, start + step * 3, null], options: [answer - 1, answer, answer + step], answer: String(answer) };
+    const solution = Array.from({ length: 36 }, (_, cellIndex) => {
+      const row = Math.floor(cellIndex / 6);
+      const column = cellIndex % 6;
+      return ((row * 3 + Math.floor(row / 2) + column + index) % 6) + 1;
+    });
+    const blankCount = 14 + (index % 5);
+    const blanks = new Set(Array.from({ length: blankCount }, (_, blankIndex) => (blankIndex * 7 + index * 5) % 36));
+    const grid = solution.map((value, cellIndex) => blanks.has(cellIndex) ? 0 : value);
+    return { kind: "sudoku", question: `6×6数独第${index + 1}关：每行、每列和每个小宫都填入1到6`, grid, solution, options: [1, 2, 3, 4, 5, 6], answer: solution.join(",") };
   }),
   "game-spot": Array.from({ length: 40 }, (_, index) => {
     const [same, different] = spotPairs[index % spotPairs.length];
@@ -858,14 +865,6 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "pattern", question: `宝藏密码：找出第${index + 1}关问号里的图案`, sequence, options: [first, second, third], answer };
   }),
 };
-
-gameQuestionBanks["game-number"] = gameQuestionBanks["game-number"].map((challenge) => {
-  if (challenge.kind !== "number-path") return challenge;
-  const known = challenge.path.filter((value): value is number => value !== null);
-  const step = known[1] - known[0];
-  const answer = Number(challenge.answer);
-  return { ...challenge, path: [...known.slice(0, 4), null, answer + step, answer + step * 2] };
-});
 
 gameQuestionBanks["game-spot"] = gameQuestionBanks["game-spot"].map((challenge) => {
   if (challenge.kind !== "spot") return challenge;

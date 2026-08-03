@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Bird,
+  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -46,7 +47,7 @@ import {
   wordProblemAnswerMatches,
   wordProblems,
 } from "./appData";
-import { chineseReadings, extendedReadingComprehensions, readingComprehensions, shopRewards } from "./data";
+import { chineseReadings, extendedReadingComprehensions, getDailyScienceEpisode, readingComprehensions, shopRewards } from "./data";
 import { areAllArithmeticAnswersFilled, arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
 import type { ReadingQuestion } from "./types/learning";
 import {
@@ -144,7 +145,7 @@ interface TaskOutcome extends CompletionResultInput {
 }
 
 const emptyOutcome: TaskOutcome = { ready: false, durationSeconds: 0, attempts: 1, wrongQuestions: [] };
-const sectionKeys: ViewKey[] = ["home", "chinese", "math", "english", "game", "sport", "shop", "pet"];
+const sectionKeys: ViewKey[] = ["home", "chinese", "math", "english", "game", "science", "sport", "shop", "pet"];
 const encouragements = [
   "认真完成一小步，今天就更稳一点。",
   "慢慢读、认真写，好习惯会留下来。",
@@ -419,6 +420,8 @@ export default function App() {
           <ShopPage state={state} setState={setState} streak={streak} requiredTaskIds={requiredTaskIds} parentSession={parentSession} setParentSession={setParentSession} onVictory={() => setShowVictory(true)} cloud={workspace} />
         ) : route.view === "pet" ? (
           <PetPage state={state} setState={setState} cloud={workspace} onToast={setToast} />
+        ) : route.view === "science" ? (
+          <SciencePage dateKey={state.dateKey} />
         ) : (
           <SectionPage view={route.view} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} contentDateKey={contentDateKey} onOpenTask={openTask} />
         )}
@@ -908,6 +911,71 @@ function legacySpeak(text: string, lang = "zh-CN") {
   utterance.pitch = lang.startsWith("zh") ? (selectedFemaleVoice ? 1.12 : 1.2) : 1.03;
   utterance.volume = 1;
   speechWindow.speechSynthesis.speak(utterance);
+}
+
+function SciencePage({ dateKey }: { dateKey: string }) {
+  const episode = useMemo(() => getDailyScienceEpisode(dateFromKey(dateKey)), [dateKey]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activePanel = episode.panels[activeIndex] ?? episode.panels[0];
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [dateKey, episode.id]);
+
+  const movePanel = (offset: number) => {
+    setActiveIndex((current) => Math.max(0, Math.min(episode.panels.length - 1, current + offset)));
+  };
+
+  const playDialogue = () => speak(`${activePanel.dialogue} ${activePanel.fact}`);
+
+  return (
+    <section className="science-page">
+      <header className="science-hero">
+        <div className="science-hero-character"><img src={characterImages[activePanel.character]} alt="" /></div>
+        <div className="science-hero-copy">
+          <p className="eyebrow">每日一格 · {episode.topic}</p>
+          <h2>{episode.title}</h2>
+          <p>{episode.hook}</p>
+          <span className="science-date"><BookOpen size={16} /> {formatScienceDate(dateKey)}</span>
+        </div>
+      </header>
+
+      <section className="science-comic" aria-labelledby="science-comic-title">
+        <div className="science-comic-heading">
+          <div><p className="eyebrow">今天的漫画课堂</p><h3 id="science-comic-title">{activePanel.sticker} · 第{activeIndex + 1}格</h3></div>
+          <button className="secondary" type="button" onClick={playDialogue}><Play size={17} />播放台词</button>
+        </div>
+        <div className="science-live-line" aria-live="polite" aria-atomic="true"><strong>{activePanel.characterName}：</strong>{activePanel.dialogue}</div>
+        <div className="science-panel-grid" role="list" aria-label="今日科普漫画分格">
+          {episode.panels.map((panel, index) => (
+            <button className={`science-panel${index === activeIndex ? " is-active" : ""}`} type="button" role="listitem" aria-pressed={index === activeIndex} key={panel.id} onClick={() => setActiveIndex(index)}>
+              <span className="science-panel-number">{index + 1}</span>
+              <span className="science-panel-art"><img src={characterImages[panel.character]} alt={`${panel.characterName}漫画角色`} /></span>
+              <span className="science-speech-bubble">{panel.dialogue}</span>
+              <span className="science-caption">{panel.caption}</span>
+              <span className="science-fact"><strong>小知识</strong>{panel.fact}</span>
+              <span className="science-sticker">{panel.sticker}</span>
+            </button>
+          ))}
+        </div>
+        <div className="science-comic-controls" aria-label="漫画分格切换">
+          <button className="secondary" type="button" disabled={activeIndex === 0} onClick={() => movePanel(-1)}><ChevronLeft size={18} />上一格</button>
+          <span aria-live="polite">{activeIndex + 1} / {episode.panels.length}</span>
+          <button className="primary" type="button" disabled={activeIndex === episode.panels.length - 1} onClick={() => movePanel(1)}>下一格<ChevronRight size={18} /></button>
+        </div>
+      </section>
+
+      <aside className="science-takeaway" aria-label="今日科学结论">
+        <span className="science-takeaway-icon"><BookOpen size={22} /></span>
+        <div><p className="eyebrow">嘟嘟的科学收尾</p><strong>把今天的知识讲给家人听，漫画就真的活起来啦！</strong></div>
+      </aside>
+    </section>
+  );
+}
+
+function formatScienceDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return `${year}年${month}月${day}日`;
 }
 
 function MorningReading({ dateKey }: { dateKey: string }) {
@@ -1405,7 +1473,7 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
         </div>
       ) : (
         <>
-          <GameRound key={challenge.question} challenge={challenge} selected={selected} correct={roundCorrect} onSubmit={choose} />
+          <GameRound key={challenge.question} challenge={challenge} draftKey={`game-sudoku:${taskId}:${dateKey}:${challenge.question}`} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
           {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：看看画面里的线索。"}</p> : <p className="muted game-feedback">按画面提示完成这一关。</p>}
           {roundCorrect && roundIndex < challenges.length - 1 ? <button className="primary game-next" onClick={nextRound}>下一关 <ArrowLeft className="next-arrow" size={18} /></button> : null}
         </>
@@ -1414,12 +1482,30 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
   );
 }
 
-function GameRound({ challenge, selected, correct, onSubmit }: { challenge: GameChallenge; selected: string; correct: boolean; onSubmit: (answer: string) => void }) {
+function GameRound({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
   if (challenge.kind === "classify") return <div className="game-interaction classify-game"><div className="game-character"><img src={characterImages["my-melody"]} alt="" /><span>{challenge.item}</span></div><p>{challenge.question}</p><div className="game-baskets" role="group" aria-label="汉字分类篮子">{challenge.baskets.map((basket) => <button className={selected === basket ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={basket} onClick={() => onSubmit(basket)}><span>{basket === "人物" ? "人物篮" : basket === "地点" ? "地点篮" : "动作篮"}</span></button>)}</div></div>;
-  if (challenge.kind === "number-path") return <div className="game-interaction number-path-game"><p>{challenge.question}</p><div className="number-route">{challenge.path.map((value, index) => <span className={value === null ? "missing" : ""} key={`${value}-${index}`}>{value ?? "?"}</span>)}</div><div className="number-candidates" role="group" aria-label="数字路线候选答案">{challenge.options.map((option) => <button className={selected === String(option) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(String(option))}>{option}</button>)}</div></div>;
+  if (challenge.kind === "sudoku") return <SudokuGame challenge={challenge} draftKey={draftKey} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
   if (challenge.kind === "spot") return <div className="game-interaction spot-game"><p>{challenge.question}</p><div className="spot-grid" role="group" aria-label="找不同九宫格">{challenge.tiles.map((tile, index) => <button aria-label={`第${index + 1}格 ${tile}`} className={selected === String(index) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={`${tile}-${index}`} onClick={() => onSubmit(String(index))}>{tile}</button>)}</div></div>;
   if (challenge.kind === "pattern") return <div className="game-interaction pattern-game"><div className="logic-clue"><img src={characterImages.cinnamoroll} alt="" /><p>{challenge.question}</p></div><div className="pattern-sequence" aria-label="宝藏密码图案序列">{challenge.sequence.map((symbol, index) => <span className={symbol === null ? "missing" : ""} key={index}>{symbol ?? "?"}</span>)}</div><div className="pattern-options" role="group" aria-label="宝藏密码候选图案">{challenge.options.map((option) => <button className={selected === option ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(option)}>{option}</button>)}</div></div>;
   return null;
+}
+
+function SudokuGame({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "sudoku" }>; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+  const [cells, setCells] = usePracticeDraft<number[]>(draftKey, challenge.grid);
+  const [activeCell, setActiveCell] = useState<number | null>(null);
+  const filled = cells.every((value) => value > 0);
+  const chooseNumber = (value: number) => {
+    if (activeCell === null || correct) return;
+    onBegin();
+    setCells((current) => current.map((cell, index) => index === activeCell ? value : cell));
+  };
+  const clearCell = () => {
+    if (activeCell === null || correct) return;
+    onBegin();
+    setCells((current) => current.map((cell, index) => index === activeCell ? 0 : cell));
+  };
+
+  return <div className="game-interaction sudoku-game"><div className="logic-clue"><img src={characterImages.cinnamoroll} alt="" /><p>{challenge.question}</p></div><div className="sudoku-board" role="grid" aria-label="6乘6数独棋盘">{cells.map((value, index) => <button className={`${value ? "sudoku-filled" : "sudoku-empty"} ${activeCell === index ? "sudoku-active" : ""}`} disabled={correct} key={index} aria-label={`${Math.floor(index / 6) + 1}行${index % 6 + 1}列${value || "空格"}`} onClick={() => setActiveCell(index)}>{value || ""}</button>)}</div><p className="sudoku-hint">先点击空格，再点击下方数字填入</p><div className="sudoku-options" role="group" aria-label="数独数字选择">{challenge.options.map((option) => <button className="secondary" disabled={activeCell === null || correct} key={option} onClick={() => chooseNumber(option)}>{option}</button>)}<button className="secondary" disabled={activeCell === null || correct} onClick={clearCell}><RotateCcw size={16} />清空</button></div><button className="primary sudoku-submit" disabled={!filled || correct} onClick={() => onSubmit(cells.join(","))}>检查答案</button>{selected && !correct ? <p className="gentle-retry">有些数字还需要调整，继续观察同一行、同一列和小宫。</p> : null}</div>;
 }
 
 function SportTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
