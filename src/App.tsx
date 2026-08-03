@@ -738,7 +738,7 @@ function TaskPage({ task, completed, existingResult, pending, syncPending, eligi
           <p>{encouragements[taskCatalog.indexOf(task) % encouragements.length]}</p>
         </div>
       </div>
-      <TaskContent task={task} dateKey={contentDateKey} existingResult={existingResult} masteredQuestionKeys={masteredQuestionKeys} onProgress={setOutcome} />
+      {completed && task.id === "math-arithmetic" ? <div className="panel task-completed-summary"><CheckCircle2 size={30} /><h3>今日口算已完成</h3><p>已做题目和答案不在孩子端保留，错题详情请到家长中心查看。</p></div> : <TaskContent task={task} dateKey={contentDateKey} existingResult={existingResult} masteredQuestionKeys={masteredQuestionKeys} onProgress={setOutcome} />}
       <div className="finish-bar">
         <p className={outcome.ready && eligible ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : syncPending ? "任务已保存在本机，联网后同步并结算正式积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : !eligible ? "今天可以自由练习，这项不计入今日积分。" : outcome.message ?? completionHint(task)}</p>
         <button className="primary big" disabled={!canComplete} onClick={() => onDone({
