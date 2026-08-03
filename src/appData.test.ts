@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskCatalog } from "./appData";
+import { getNightReading, taskCatalog } from "./appData";
 
 const task = (id: string) => taskCatalog.find((item) => item.id === id);
 
@@ -17,5 +17,9 @@ describe("reading completion rules", () => {
       minutes: "自主安排",
       summary: "译林版二年级上册主题听读，包含单词、核心句型和跟读任务。",
     });
+  });
+
+  it("provides longer age-appropriate passages for night reading", () => {
+    expect(getNightReading(new Date("2026-08-03T12:00:00")).text.length).toBeGreaterThan(300);
   });
 });

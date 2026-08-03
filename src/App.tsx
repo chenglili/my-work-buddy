@@ -32,6 +32,7 @@ import {
   characterImages,
   curriculumNote,
   getDailyTaskIds,
+  getNightReading,
   getGameChallenges,
   getStudySchedule,
   getWeeklyContent,
@@ -971,8 +972,8 @@ function Dictation({ dateKey, onProgress }: { dateKey: string; onProgress: (outc
 }
 
 function NightReading({ dateKey }: { dateKey: string }) {
-  const content = getWeeklyContent(dateFromKey(dateKey));
-  return <div className="panel-list"><article className="panel"><h3>{content.readingTitle}</h3><p>{content.readingText}</p><button className="secondary" onClick={() => speak(content.readingText)}><Play size={16} />听读文本</button></article></div>;
+  const passage = getNightReading(dateFromKey(dateKey));
+  return <div className="panel-list"><article className="panel"><p className="eyebrow">适龄课外阅读 · 约400字</p><h3>{passage.title}</h3><p>{passage.text}</p><button className="secondary" onClick={() => speak(passage.text)}><Play size={16} />听读全文</button></article></div>;
 }
 
 function PictureWriting({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
