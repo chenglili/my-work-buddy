@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getNightReading, taskCatalog } from "./appData";
+import { extendedReadingComprehensions } from "./data";
 
 const task = (id: string) => taskCatalog.find((item) => item.id === id);
 
@@ -21,5 +22,13 @@ describe("reading completion rules", () => {
 
   it("provides longer age-appropriate passages for night reading", () => {
     expect(getNightReading(new Date("2026-08-03T12:00:00")).text.length).toBeGreaterThan(300);
+  });
+
+  it("keeps comprehension passages in the 600-800 character range", () => {
+    for (const item of extendedReadingComprehensions) {
+      const length = item.paragraphs.join("").length;
+      expect(length, item.id).toBeGreaterThanOrEqual(600);
+      expect(length, item.id).toBeLessThanOrEqual(800);
+    }
   });
 });

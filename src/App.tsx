@@ -46,7 +46,7 @@ import {
   wordProblemAnswerMatches,
   wordProblems,
 } from "./appData";
-import { chineseReadings, readingComprehensions, shopRewards } from "./data";
+import { chineseReadings, extendedReadingComprehensions, readingComprehensions, shopRewards } from "./data";
 import { areAllArithmeticAnswersFilled, arithmeticScore, findWrongArithmeticIndices, matchKeywordGroups } from "./learningRules";
 import type { ReadingQuestion } from "./types/learning";
 import {
@@ -987,7 +987,7 @@ function PictureWriting({ dateKey, onProgress }: { dateKey: string; onProgress: 
 function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
   const date = dateFromKey(dateKey);
   const weekNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 604800000);
-  const item = readingComprehensions[weekNumber % readingComprehensions.length];
+  const item = extendedReadingComprehensions[weekNumber % extendedReadingComprehensions.length];
   const [answers, setAnswers] = usePracticeDraft<Record<string, string>>(`reading-comprehension:${dateKey}:answers`, {});
   const [checked, setChecked] = usePracticeDraft<boolean>(`reading-comprehension:${dateKey}:checked`, false);
   const [attempts, setAttempts] = usePracticeDraft<number>(`reading-comprehension:${dateKey}:attempts`, 0);
