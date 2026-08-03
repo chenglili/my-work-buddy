@@ -1113,7 +1113,7 @@ function WordProblemPractice({ items, guide, draftKey, masteredQuestionKeys = []
     setAttempts(nextAttempts);
     onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, correctQuestions: freshItems.filter((item) => !wrong.includes(item.prompt)).map((item) => item.prompt), message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再检查算式和单位。` });
   };
-  return <div className="panel"><h3>生活化应用题</h3><p className="practice-guide">{guide}</p>{freshItems.map((item, index) => { const unit = item.answer.match(/[（(]([\u4e00-\u9fff]+)[）)]$/)?.[1]; return <div className="question" key={`${item.prompt}-${index}`}><p>{item.prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder="例如：18+7=25" />{unit ? <div className="unit-picker" aria-label="选择答案单位"><span>答案单位：</span><button type="button" className="secondary" onClick={() => appendUnit(index, unit)}>（{unit}）</button></div> : null}{checked ? <p className="answer">答案：{item.answer}</p> : null}</div>; })}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+  return <div className="panel"><h3>生活化应用题</h3><p className="practice-guide">{guide}</p>{freshItems.map((item, index) => { const unit = item.answer.match(/[（(]([\u4e00-\u9fff]+)[）)]$/)?.[1]; return <div className="question" key={`${item.prompt}-${index}`}><p>{item.prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} />{unit ? <div className="unit-picker" aria-label="选择答案单位"><span>答案单位：</span><button type="button" className="secondary" onClick={() => appendUnit(index, unit)}>（{unit}）</button></div> : null}{checked ? <p className="answer">答案：{item.answer}</p> : null}</div>; })}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
 function MultiplyDivide({ dateKey, masteredQuestionKeys, onProgress }: { dateKey: string; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
@@ -1131,7 +1131,7 @@ function WordProblems({ dateKey, masteredQuestionKeys, onProgress }: { dateKey: 
   const offset = (Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000) * 5) % wordProblems.length;
   const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((problem) => ({ prompt: problem.prompt, answer: problem.answer, isCorrect: (input: string) => wordProblemAnswerMatches(input, problem) }));
   if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} masteredQuestionKeys={masteredQuestionKeys} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" draftKey={`word-problems:${dateKey}`} onProgress={onProgress} />;
-  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" draftKey={`word-problems:${dateKey}`} masteredQuestionKeys={masteredQuestionKeys} items={items} onProgress={onProgress} />;
+  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" draftKey={`word-problems:${dateKey}`} masteredQuestionKeys={masteredQuestionKeys} items={items} onProgress={onProgress} />;
 }
 
 function EnglishDaily({ dateKey }: { dateKey: string }) {
