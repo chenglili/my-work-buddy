@@ -383,7 +383,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "歌", pinyin: "gē", strokes: "左右结构，最后写捺", group: "唱歌、儿歌" },
     ],
     dictation: ["校园", "队伍", "国旗", "唱歌", "老师", "同学", "认真", "安静"],
-    memorization: ["树无根不长，人无志不立。", "欲穷千里目，更上一层楼。"],
+    memorization: ["树无根不长，人无志不立。", "欲穷千里目，更上一层楼。", "有志者事竟成。", "志当存高远。", "路遥知马力，日久见人心。", "少壮不努力，老大徒伤悲。"],
     picture: { title: "快乐课间", scene: "🏫　👧　🪁　🌳", hints: "操场、同学、游戏、开心", example: "下课了，同学们来到操场上。有的跳绳，有的放风筝，大家玩得很开心。" },
     english: {
       unit: "Unit 1",
@@ -417,7 +417,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "果", pinyin: "guǒ", strokes: "先写日，再写木", group: "水果、果园" },
     ],
     dictation: ["秋风", "黄色", "树叶", "果园", "苹果", "稻田", "枫叶", "金色"],
-    memorization: ["一场秋雨一场寒，十场秋雨要穿棉。", "墙角数枝梅，凌寒独自开。"],
+    memorization: ["一场秋雨一场寒，十场秋雨要穿棉。", "墙角数枝梅，凌寒独自开。", "停车坐爱枫林晚，霜叶红于二月花。", "解落三秋叶，能开二月花。", "一年好景君须记，最是橙黄橘绿时。", "秋处露秋寒霜降。"],
     picture: { title: "秋游", scene: "🍁　🧺　👧　🍎", hints: "秋天、果园、篮子、丰收", example: "秋天到了，我们去果园秋游。树上挂着红红的苹果，大家把果子轻轻放进篮子里。" },
     english: {
       unit: "Unit 2",
@@ -451,7 +451,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "洞", pinyin: "dòng", strokes: "三点水呈弧形", group: "山洞、树洞" },
     ],
     dictation: ["松树", "松果", "熊猫", "小猫", "树洞", "树林", "动物", "朋友"],
-    memorization: ["己所不欲，勿施于人。", "与朋友交，言而有信。"],
+    memorization: ["己所不欲，勿施于人。", "与朋友交，言而有信。", "人而无信，不知其可也。", "三人行，必有我师焉。", "学而时习之，不亦说乎？", "温故而知新，可以为师矣。"],
     picture: { title: "帮助小鸟", scene: "🐦　🌳　👧　🪺", hints: "小鸟、树下、鸟窝、帮助", example: "一只小鸟从窝里掉了下来。小朋友请大人帮忙，把它安全地送回鸟窝。" },
     english: {
       unit: "Unit 3",
@@ -485,7 +485,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "船", pinyin: "chuán", strokes: "舟字旁窄，右边上下对正", group: "小船、船只" },
     ],
     dictation: ["小桥", "河水", "家乡", "小船", "清晨", "白鹭", "寻找", "美丽"],
-    memorization: ["白日依山尽，黄河入海流。", "有山皆图画，无水不文章。"],
+    memorization: ["白日依山尽，黄河入海流。", "有山皆图画，无水不文章。", "飞流直下三千尺，疑是银河落九天。", "两岸青山相对出，孤帆一片日边来。", "欲把西湖比西子，淡妆浓抹总相宜。", "山明水净夜来霜，数树深红出浅黄。"],
     picture: { title: "河边散步", scene: "🌉　🛶　🌿　👨‍👩‍👧", hints: "傍晚、小桥、河边、散步", example: "傍晚，我们一家沿着河边散步。小船慢慢划过桥洞，晚风吹来很舒服。" },
     english: {
       unit: "Unit 4",
@@ -519,7 +519,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "脚", pinyin: "jiǎo", strokes: "左中右结构要紧凑", group: "脚印、手脚" },
     ],
     dictation: ["雪花", "冬天", "寒冷", "脚印", "屋顶", "树枝", "手套", "天空"],
-    memorization: ["遥知不是雪，为有暗香来。", "天苍苍，野茫茫，风吹草低见牛羊。"],
+    memorization: ["遥知不是雪，为有暗香来。", "天苍苍，野茫茫，风吹草低见牛羊。", "危楼高百尺，手可摘星辰。", "不知细叶谁裁出，二月春风似剪刀。", "忽如一夜春风来，千树万树梨花开。", "孤舟蓑笠翁，独钓寒江雪。"],
     picture: { title: "堆雪人", scene: "⛄　❄️　🧣　👧", hints: "雪地、雪球、围巾、合作", example: "雪停了，我和朋友一起堆雪人。我们给雪人戴上围巾，还用胡萝卜做鼻子。" },
     english: {
       unit: "Unit 5",
@@ -553,7 +553,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "净", pinyin: "jìng", strokes: "两点水短，争字末笔出钩", group: "干净、洁净" },
     ],
     dictation: ["劳动", "书桌", "整理", "干净", "铅笔", "书本", "整齐", "自己"],
-    memorization: ["不以规矩，不能成方圆。", "一粥一饭，当思来处不易。"],
+    memorization: ["不以规矩，不能成方圆。", "一粥一饭，当思来处不易。", "谁知盘中餐，粒粒皆辛苦。", "静以修身，俭以养德。", "由俭入奢易，由奢入俭难。", "取之有度，用之有节，则常足。"],
     picture: { title: "一起做家务", scene: "🧹　🪣　👧　🏠", hints: "周末、扫地、整理、分工", example: "周末，我和爸爸妈妈一起做家务。我负责扫地和整理玩具，家里很快变得干干净净。" },
     english: {
       unit: "Unit 6",
@@ -587,7 +587,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "方", pinyin: "fāng", strokes: "点在竖中线，横折钩有力", group: "方向、方法" },
     ],
     dictation: ["影子", "观察", "变化", "方向", "早晨", "中午", "太阳", "发现"],
-    memorization: ["读书百遍，而义自见。", "书籍是人类进步的阶梯。"],
+    memorization: ["读书百遍，而义自见。", "书籍是人类进步的阶梯。", "黑发不知勤学早，白首方悔读书迟。", "问渠那得清如许？为有源头活水来。", "读书破万卷，下笔如有神。", "三更灯火五更鸡，正是男儿读书时。"],
     picture: { title: "观察影子", scene: "☀️　👧　📏　🌳", hints: "太阳、影子、长短、记录", example: "我在操场上观察影子。早晨和中午的影子长短不同，我把发现认真记了下来。" },
     english: {
       unit: "Unit 7",
@@ -621,7 +621,7 @@ export const weeklyContent: WeeklyContent[] = [
       { word: "步", pinyin: "bù", strokes: "上下对正，最后一撇舒展", group: "进步、脚步" },
     ],
     dictation: ["目标", "标准", "进步", "脚步", "认真", "坚持", "运动", "成长"],
-    memorization: ["千里之行，始于足下。", "路虽远，行则将至。"],
+    memorization: ["千里之行，始于足下。", "路虽远，行则将至。", "不积跬步，无以至千里。", "锲而不舍，金石可镂。", "世上无难事，只怕有心人。", "坚持就是胜利。"],
     picture: { title: "我的进步", scene: "📚　⭐　🏃　👧", hints: "目标、练习、坚持、进步", example: "我给自己定下一个小目标。每天认真练习并坚持运动，我发现自己越来越有信心。" },
     english: {
       unit: "Unit 8",
