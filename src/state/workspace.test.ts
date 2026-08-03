@@ -121,6 +121,11 @@ describe("workspace state", () => {
     expect(finished.completedDates).toEqual(["2026-07-31"]);
     expect(finished.weeklyPoints["2026-07-27"]).toBe(26);
     expect(finished.dailyEarnedPoints["2026-07-31"]).toBe(26);
+    expect(finished.pointRecords.map((record) => ({ delta: record.delta, reason: record.reason }))).toEqual([
+      { delta: 6, reason: "task" },
+      { delta: 15, reason: "daily_bonus" },
+      { delta: 5, reason: "task" },
+    ]);
   });
 
   it("awards the same task again only after a new content round", () => {
@@ -411,6 +416,7 @@ describe("parent approval and rewards", () => {
     const approved = approveReward(requested, requestId, "0801", day("2026-08-01"))!;
 
     expect(approved.points).toBe(40);
+    expect(approved.pointRecords[0]).toMatchObject({ delta: -80, reason: "reward", sourceId: "reward-snack" });
     expect(approveReward(approved, requestId, "0801", day("2026-08-01"))).toBeNull();
     expect(fulfillReward(approved, requestId, "0801", day("2026-08-02"))).toBeNull();
     const fulfilled = fulfillReward(approved, requestId, "0802", day("2026-08-02"))!;
@@ -462,7 +468,30 @@ describe("parent approval and rewards", () => {
     expect(dailyParentPin(augustFirst)).toBe("0801");
     expect(dailyParentPin(day("2026-12-09"))).toBe("1209");
     expect(adjustPoints(state, 10, "2580", augustFirst)).toBeNull();
-    expect(adjustPoints(state, -50, "0801", augustFirst)?.points).toBe(0);
+    const adjusted = adjustPoints(state, -50, "0801", augustFirst)!;
+    expect(adjusted.points).toBe(0);
+    expect(adjusted.pointRecords[0]).toMatchObject({ delta: -10, reason: "adjustment" });
+  });
+
+  it("builds fallback point records for stored data without ledger details", () => {
+    const normalized = normalizeWorkspaceState({
+      points: 40,
+      dailyEarnedPoints: { "2026-08-01": 120 },
+      rewardRequests: [{
+        id: "reward-1",
+        rewardId: "reward-snack",
+        rewardName: "零食",
+        cost: 80,
+        status: "fulfilled",
+        requestedAt: "2026-08-02T01:00:00.000Z",
+        approvedAt: "2026-08-02T01:05:00.000Z",
+        fulfilledAt: "2026-08-02T01:10:00.000Z",
+      }],
+    }, day("2026-08-03"));
+
+    expect(normalized.pointRecords.map((record) => record.delta).reduce((sum, delta) => sum + delta, 0)).toBe(40);
+    expect(normalized.pointRecords.map((record) => record.reason)).toContain("legacy_daily_earned");
+    expect(normalized.pointRecords.map((record) => record.reason)).toContain("reward");
   });
 });
 

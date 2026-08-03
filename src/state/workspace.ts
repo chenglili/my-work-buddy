@@ -73,6 +73,20 @@ export interface RewardRequest {
   rejectedAt?: string;
 }
 
+export type PointRecordReason = 'task' | 'daily_bonus' | 'reward' | 'pet_purchase' | 'adjustment' | 'legacy_daily_earned' | 'legacy_balance_adjustment';
+
+export interface PointRecord {
+  id: string;
+  dateKey: string;
+  delta: number;
+  reason: PointRecordReason;
+  sourceKey: string;
+  sourceId?: string;
+  title?: string;
+  detail?: string;
+  createdAt: string;
+}
+
 export interface WorkspaceState {
   dateKey: string;
   contentDateKey: string;
@@ -86,6 +100,7 @@ export interface WorkspaceState {
   pendingTaskReviews: PendingTaskReview[];
   weeklyPoints: Record<string, number>;
   dailyEarnedPoints: Record<string, number>;
+  pointRecords: PointRecord[];
   rewardRequests: RewardRequest[];
   notifiedDailyReadyDates: string[];
   masteredQuestionKeys: string[];
@@ -171,10 +186,24 @@ export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   pendingTaskReviews: [],
   weeklyPoints: {},
   dailyEarnedPoints: {},
+  pointRecords: [],
   rewardRequests: [],
   notifiedDailyReadyDates: [],
   masteredQuestionKeys: [],
 });
+
+const pointSourceKeyForTask = (date: string, taskId: string, round = 0) => round
+  ? `task:${date}:${taskId}:${round}`
+  : `task:${date}:${taskId}`;
+
+const appendPointRecords = (state: WorkspaceState, records: PointRecord[]) => {
+  if (!records.length) return state.pointRecords;
+  const existing = new Set(state.pointRecords.map((record) => record.sourceKey));
+  return [
+    ...records.filter((record) => !existing.has(record.sourceKey)),
+    ...state.pointRecords,
+  ].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+};
 
 export const refreshPetState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
   const pet = refreshPetProfile(state.pet, today);
@@ -221,6 +250,17 @@ export const purchasePetItem = (state: WorkspaceState, itemId: PetItemId, now = 
   return {
     ...freshState,
     points: freshState.points - item.price,
+    pointRecords: appendPointRecords(freshState, [{
+      id: `local-pet-purchase-${now.getTime()}-${item.id}`,
+      dateKey: dateKey(now),
+      delta: -item.price,
+      reason: 'pet_purchase',
+      sourceKey: `pet-purchase:${now.getTime()}:${item.id}`,
+      sourceId: item.id,
+      title: item.name,
+      detail: '宠物用品购买',
+      createdAt: now.toISOString(),
+    }]),
     pet: {
       ...pet,
       lastAction: 'purchase',
@@ -298,6 +338,28 @@ export const completeTask = (
   const shouldAwardBonus = allDone && !freshState.bonusAwarded;
   const awardedPoints = reward + (shouldAwardBonus ? 15 : 0);
   const currentWeek = weekKey(today);
+  const taskSourceKey = pointSourceKeyForTask(todayKey, taskId, round);
+  const pointRecords: PointRecord[] = [{
+    id: `local-${taskSourceKey}`,
+    dateKey: todayKey,
+    delta: reward,
+    reason: 'task',
+    sourceKey: taskSourceKey,
+    sourceId: taskId,
+    detail: round ? `第${round + 1}轮练习` : undefined,
+    createdAt: today.toISOString(),
+  }];
+  if (shouldAwardBonus) {
+    pointRecords.push({
+      id: `local-daily-bonus-${todayKey}`,
+      dateKey: todayKey,
+      delta: 15,
+      reason: 'daily_bonus',
+      sourceKey: `daily-bonus:${todayKey}`,
+      detail: '当天必做任务全部完成',
+      createdAt: today.toISOString(),
+    });
+  }
   const taskResult: TaskResult = {
     taskId,
     dateKey: todayKey,
@@ -322,6 +384,7 @@ export const completeTask = (
       ? Array.from(new Set([...freshState.completedDates, todayKey])).sort()
       : freshState.completedDates,
     taskResults: [...freshState.taskResults, taskResult],
+    pointRecords: appendPointRecords(freshState, pointRecords),
     masteredQuestionKeys: Array.from(new Set([...freshState.masteredQuestionKeys, ...(result.correctQuestions ?? [])])),
     weeklyPoints: {
       ...freshState.weeklyPoints,
@@ -464,6 +527,17 @@ export const approveReward = (state: WorkspaceState, requestId: string, pin: str
   return {
     ...state,
     points: state.points - request.cost,
+    pointRecords: appendPointRecords(state, [{
+      id: `local-reward-${request.id}`,
+      dateKey: dateKey(now),
+      delta: -request.cost,
+      reason: 'reward',
+      sourceKey: `reward:${request.id}`,
+      sourceId: request.rewardId,
+      title: request.rewardName,
+      detail: '家长批准兑换',
+      createdAt: now.toISOString(),
+    }]),
     rewardRequests: state.rewardRequests.map((item) => item.id === requestId
       ? { ...item, status: 'approved', approvedAt: now.toISOString() }
       : item),
@@ -496,7 +570,20 @@ export const rejectReward = (state: WorkspaceState, requestId: string, pin: stri
 
 export const adjustPoints = (state: WorkspaceState, amount: number, pin: string, now = new Date()): WorkspaceState | null => {
   if (!verifyParentPin(state, pin, now) || !Number.isInteger(amount) || amount === 0) return null;
-  return { ...state, points: Math.max(0, state.points + amount) };
+  const delta = amount < 0 ? -Math.min(state.points, Math.abs(amount)) : amount;
+  return {
+    ...state,
+    points: Math.max(0, state.points + amount),
+    pointRecords: appendPointRecords(state, [{
+      id: `local-adjustment-${now.getTime()}`,
+      dateKey: dateKey(now),
+      delta,
+      reason: 'adjustment',
+      sourceKey: `adjustment:${now.getTime()}`,
+      detail: '家长手动调整',
+      createdAt: now.toISOString(),
+    }]),
+  };
 };
 
 const shiftDate = (date: Date, days: number) => {
@@ -572,6 +659,16 @@ export const getMonthlyReport = (state: WorkspaceState, today = new Date()) => {
 
 export const migrateLegacyState = (legacy: LegacyWorkspaceState, today = new Date()): WorkspaceState => {
   const initial = initialWorkspaceState(today);
+  const rewardRequests = (legacy.redemptions ?? []).map((item) => ({
+    id: item.id,
+    rewardId: item.rewardId,
+    rewardName: item.rewardName,
+    cost: item.cost,
+    status: 'fulfilled' as const,
+    requestedAt: item.redeemedAt,
+    approvedAt: item.redeemedAt,
+    fulfilledAt: item.redeemedAt,
+  }));
   return refreshDailyState({
     ...initial,
     dateKey: legacy.dateKey ?? initial.dateKey,
@@ -579,17 +676,54 @@ export const migrateLegacyState = (legacy: LegacyWorkspaceState, today = new Dat
     completedTaskIds: legacy.completedTaskIds ?? [],
     bonusAwarded: legacy.bonusAwarded ?? false,
     completedDates: legacy.completedDates ?? [],
-    rewardRequests: (legacy.redemptions ?? []).map((item) => ({
-      id: item.id,
-      rewardId: item.rewardId,
-      rewardName: item.rewardName,
-      cost: item.cost,
-      status: 'fulfilled',
-      requestedAt: item.redeemedAt,
-      approvedAt: item.redeemedAt,
-      fulfilledAt: item.redeemedAt,
-    })),
+    pointRecords: buildFallbackPointRecords({ ...initial, points: legacy.points ?? 0, rewardRequests }),
+    rewardRequests,
   }, today);
+};
+
+const buildFallbackPointRecords = (state: Pick<WorkspaceState, 'points' | 'dailyEarnedPoints' | 'rewardRequests'>): PointRecord[] => {
+  const records: PointRecord[] = [];
+  for (const [earnedDate, points] of Object.entries(state.dailyEarnedPoints)) {
+    if (points) {
+      records.push({
+        id: `legacy-earned-${earnedDate}`,
+        dateKey: earnedDate,
+        delta: points,
+        reason: 'legacy_daily_earned',
+        sourceKey: `legacy-earned:${earnedDate}`,
+        detail: '历史学习积分汇总',
+        createdAt: `${earnedDate}T12:00:00.000Z`,
+      });
+    }
+  }
+  for (const request of state.rewardRequests) {
+    if ((request.status === 'approved' || request.status === 'fulfilled') && request.approvedAt) {
+      records.push({
+        id: `legacy-reward-${request.id}`,
+        dateKey: request.approvedAt.slice(0, 10),
+        delta: -request.cost,
+        reason: 'reward',
+        sourceKey: `legacy-reward:${request.id}`,
+        sourceId: request.rewardId,
+        title: request.rewardName,
+        detail: '历史兑换扣分',
+        createdAt: request.approvedAt,
+      });
+    }
+  }
+  const recordedBalance = records.reduce((sum, record) => sum + record.delta, 0);
+  if (state.points !== recordedBalance) {
+    records.push({
+      id: 'legacy-balance-adjustment',
+      dateKey: dateKey(),
+      delta: state.points - recordedBalance,
+      reason: 'legacy_balance_adjustment',
+      sourceKey: 'legacy-balance',
+      detail: '历史余额校准',
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return records.sort((first, second) => second.createdAt.localeCompare(first.createdAt));
 };
 
 const normalizePetState = (parsed: Partial<PetState> | undefined, today: Date): PetState => {
@@ -618,6 +752,11 @@ export const normalizeWorkspaceState = (parsed: Partial<WorkspaceState>, today: 
     pendingTaskReviews: parsed.pendingTaskReviews ?? [],
     weeklyPoints: parsed.weeklyPoints ?? {},
     dailyEarnedPoints: parsed.dailyEarnedPoints ?? {},
+    pointRecords: parsed.pointRecords ?? buildFallbackPointRecords({
+      points: parsed.points ?? 0,
+      dailyEarnedPoints: parsed.dailyEarnedPoints ?? {},
+      rewardRequests: parsed.rewardRequests ?? [],
+    }),
     rewardRequests: parsed.rewardRequests ?? [],
     notifiedDailyReadyDates: parsed.notifiedDailyReadyDates ?? [],
     masteredQuestionKeys: parsed.masteredQuestionKeys ?? [],

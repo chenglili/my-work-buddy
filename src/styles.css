@@ -1494,9 +1494,9 @@ textarea {
 
 .shop-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 4px;
-  max-width: 560px;
+  max-width: 720px;
   margin-bottom: 14px;
   padding: 4px;
   border: 1px solid #e9bacd;
@@ -1778,6 +1778,96 @@ textarea {
   width: 70px;
   height: 70px;
   object-fit: contain;
+}
+
+.point-ledger-section {
+  display: grid;
+  gap: 12px;
+}
+
+.point-ledger-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.point-ledger-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.point-ledger-summary span {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7fb;
+  color: #765664;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.point-ledger-summary strong {
+  color: #a4416e;
+}
+
+.point-ledger-list {
+  display: grid;
+  gap: 8px;
+}
+
+.point-ledger-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #ead8df;
+  border-radius: 8px;
+  background: #fffafb;
+}
+
+.point-ledger-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.point-ledger-mark.plus {
+  background: #63b98f;
+}
+
+.point-ledger-mark.minus {
+  background: #df7da1;
+}
+
+.point-ledger-copy strong {
+  display: block;
+  color: #513441;
+}
+
+.point-ledger-copy p {
+  margin: 3px 0 0;
+  color: #7b6170;
+  font-size: 14px;
+}
+
+.point-ledger-delta {
+  font-size: 20px;
+}
+
+.point-ledger-delta.plus {
+  color: #247651;
+}
+
+.point-ledger-delta.minus {
+  color: #af3f6a;
 }
 
 .parent-gate {
@@ -3068,6 +3158,22 @@ textarea {
   .request-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .point-ledger-head {
+    flex-direction: column;
+  }
+
+  .point-ledger-summary {
+    justify-content: flex-start;
+  }
+
+  .point-ledger-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .point-ledger-delta {
+    grid-column: 2;
   }
 
   .request-actions {

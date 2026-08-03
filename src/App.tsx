@@ -1662,7 +1662,7 @@ function petOperationError(error: unknown) {
 }
 
 function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, setParentSession, onVictory, cloud }: { state: WorkspaceState; setState: (state: WorkspaceState) => void; streak: number; requiredTaskIds: string[]; parentSession: { dateKey: string; pin: string } | null; setParentSession: (session: { dateKey: string; pin: string } | null) => void; onVictory: () => void; cloud: CloudWorkspaceController }) {
-  const [shopTab, setShopTab] = useState<"rewards" | "records" | "parent">("rewards");
+  const [shopTab, setShopTab] = useState<"rewards" | "records" | "points" | "parent">("rewards");
   const [pin, setPin] = useState("");
   const [adjustment, setAdjustment] = useState("");
   const [message, setMessage] = useState("");
@@ -1858,6 +1858,7 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       <div className="shop-tabs" role="tablist" aria-label="积分商店页面">
         <button className={shopTab === "rewards" ? "active" : ""} role="tab" aria-selected={shopTab === "rewards"} onClick={() => setShopTab("rewards")}>奖励货架</button>
         <button className={shopTab === "records" ? "active" : ""} role="tab" aria-selected={shopTab === "records"} onClick={() => setShopTab("records")}>兑换记录</button>
+        <button className={shopTab === "points" ? "active" : ""} role="tab" aria-selected={shopTab === "points"} onClick={() => setShopTab("points")}>积分明细</button>
         {!cloud.enabled || cloudParent ? <button className={shopTab === "parent" ? "active" : ""} role="tab" aria-selected={shopTab === "parent"} onClick={() => setShopTab("parent")}>家长中心</button> : null}
       </div>
 
@@ -1891,6 +1892,8 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
         </div>
       ) : null}
 
+      {shopTab === "points" ? <PointLedgerView state={state} /> : null}
+
       {shopTab === "parent" ? (
         <div className="parent-center">
           {!parentUnlocked ? <section className="parent-gate"><LockKeyhole size={30} /><div><h3>家长验证</h3><p>请输入今日四位家长口令，验证后即可审核学习、处理兑换和调整积分。</p><div className="parent-unlock-row"><input className="pin-input" aria-label="家长口令" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="今日四位口令" /><button className="primary" disabled={pin.length !== 4} onClick={unlockParent}>进入家长中心</button></div></div></section> : <>
@@ -1909,6 +1912,52 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
       ) : null}
     </section>
   );
+}
+
+function PointLedgerView({ state }: { state: WorkspaceState }) {
+  const records = [...state.pointRecords].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+  const earned = records.filter((record) => record.delta > 0).reduce((sum, record) => sum + record.delta, 0);
+  const spent = records.filter((record) => record.delta < 0).reduce((sum, record) => sum + Math.abs(record.delta), 0);
+
+  return (
+    <section className="record-section point-ledger-section">
+      <div className="point-ledger-head">
+        <div>
+          <p className="eyebrow">每一笔积分来源都在这里</p>
+          <h3><Star size={20} /> 积分明细</h3>
+        </div>
+        <div className="point-ledger-summary">
+          <span>累计获得 <strong>+{earned}</strong></span>
+          <span>累计使用 <strong>-{spent}</strong></span>
+          <span>当前余额 <strong>{state.points}</strong></span>
+        </div>
+      </div>
+      <div className="point-ledger-list">
+        {records.length ? records.map((record) => (
+          <article className="point-ledger-row" key={record.id || record.sourceKey}>
+            <div className={record.delta > 0 ? "point-ledger-mark plus" : "point-ledger-mark minus"}>{record.delta > 0 ? "+" : "-"}</div>
+            <div className="point-ledger-copy">
+              <strong>{pointRecordTitle(record)}</strong>
+              <p>{formatDate(record.dateKey)} · {new Date(record.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}{record.detail ? ` · ${record.detail}` : ""}</p>
+            </div>
+            <b className={record.delta > 0 ? "point-ledger-delta plus" : "point-ledger-delta minus"}>{record.delta > 0 ? `+${record.delta}` : record.delta}</b>
+          </article>
+        )) : <div className="empty-record"><img src={characterImages["hello-kitty"]} alt="" /><p>还没有积分明细，完成任务或兑换后会自动记录。</p></div>}
+      </div>
+    </section>
+  );
+}
+
+function pointRecordTitle(record: WorkspaceState["pointRecords"][number]) {
+  if (record.title) return record.title;
+  if (record.reason === "daily_bonus") return "全通关奖励";
+  if (record.reason === "adjustment") return "家长调整积分";
+  if (record.reason === "legacy_daily_earned") return "历史学习积分";
+  if (record.reason === "legacy_balance_adjustment") return "历史余额校准";
+  if (record.reason === "task") return taskCatalog.find((task) => task.id === record.sourceId)?.shortTitle ?? "学习任务";
+  if (record.reason === "pet_purchase") return petItemDefinitions.find((item) => item.id === record.sourceId)?.name ?? "宠物用品";
+  if (record.reason === "reward") return shopRewards.find((reward) => reward.id === record.sourceId)?.name ?? "奖励兑换";
+  return "积分记录";
 }
 
 function rewardStatusLabel(status: WorkspaceState["rewardRequests"][number]["status"]) {
