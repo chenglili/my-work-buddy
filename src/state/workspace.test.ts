@@ -222,6 +222,13 @@ describe("workspace state", () => {
     expect(calculateStreak(dates, day("2026-07-31"))).toBe(3);
   });
 
+  it("uses retained daily points when completed-date history is missing", () => {
+    expect(calculateStreak([], day("2026-08-03"), {
+      "2026-08-01": 20,
+      "2026-08-02": 20,
+    })).toBe(2);
+  });
+
   it("summarizes daily, weekly, and monthly learning records", () => {
     const augustFirst = day("2026-08-01");
     const firstDay = completeTask(initialWorkspaceState(augustFirst), "math-arithmetic", 5, ["math-arithmetic"], { score: 100, firstScore: 80, durationSeconds: 300, wrongQuestions: ["36 + 17 ="] }, augustFirst);

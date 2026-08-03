@@ -505,8 +505,11 @@ const shiftDate = (date: Date, days: number) => {
   return result;
 };
 
-export const calculateStreak = (completedDates: string[], today = new Date()) => {
-  const completed = new Set(completedDates);
+export const calculateStreak = (completedDates: string[], today = new Date(), dailyEarnedPoints: Record<string, number> = {}) => {
+  const completed = new Set([
+    ...completedDates,
+    ...Object.entries(dailyEarnedPoints).filter(([, points]) => points > 0).map(([date]) => date),
+  ]);
   let cursor = completed.has(dateKey(today)) ? today : shiftDate(today, -1);
   let streak = 0;
 

@@ -317,7 +317,7 @@ export default function App() {
   const readyTaskIds = new Set([...completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
   const completedRequired = requiredTaskIds.filter((id) => readyTaskIds.has(id)).length;
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
-  const streak = calculateStreak(state.completedDates);
+  const streak = calculateStreak(state.completedDates, currentDate, state.dailyEarnedPoints);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
   const existingTaskResult = currentTask ? state.taskResults.find((result) => result.taskId === currentTask.id && result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound) : undefined;
   const dailyReadyForNotification = isDailyReadyForNotification(state, requiredTaskIds);
