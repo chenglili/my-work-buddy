@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="趣味科普卡通人物">
+  <circle cx="48" cy="48" r="45" fill="#e8f7f2"/>
+  <circle cx="29" cy="25" r="13" fill="#333b4a"/>
+  <circle cx="67" cy="25" r="13" fill="#333b4a"/>
+  <circle cx="48" cy="49" r="32" fill="#fff" stroke="#333b4a" stroke-width="4"/>
+  <ellipse cx="35" cy="48" rx="10" ry="13" fill="#333b4a"/>
+  <ellipse cx="61" cy="48" rx="10" ry="13" fill="#333b4a"/>
+  <circle cx="35" cy="49" r="3" fill="#fff"/>
+  <circle cx="61" cy="49" r="3" fill="#fff"/>
+  <path d="M45 61 Q48 64 51 61" fill="none" stroke="#333b4a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M26 78 Q48 66 70 78 L76 92 H20 Z" fill="#7bc7bd" stroke="#333b4a" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M73 68 v15 M68 76 h10" stroke="#e59b32" stroke-width="4" stroke-linecap="round"/>
+</svg>
