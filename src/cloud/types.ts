@@ -35,6 +35,7 @@ export interface QueuedTaskCommand {
   type: "submit_task";
   dateKey: string;
   taskId: string;
+  contentRound?: number;
   result: CompletionResultInput;
   createdAt: string;
 }
@@ -58,6 +59,7 @@ export interface CloudWorkspaceController {
   signOut(): Promise<void>;
   refresh(): Promise<void>;
   refreshLocalDate(): void;
+  startContentRound(contentDateKey: string): Promise<void>;
   confirmLegacyImport(): Promise<void>;
   submitTask(task: TaskDefinition, result: CompletionResultInput): Promise<"synced" | "queued">;
   reviewTask(reviewId: string, action: "approve" | "reject"): Promise<void>;

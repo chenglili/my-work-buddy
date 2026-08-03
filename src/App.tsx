@@ -50,6 +50,7 @@ import { areAllArithmeticAnswersFilled, arithmeticScore, findWrongArithmeticIndi
 import type { ReadingQuestion } from "./types/learning";
 import {
   adjustPoints,
+  advanceContentRound,
   approveAllTaskReviews,
   approveReward,
   approveTaskReview,
@@ -152,6 +153,23 @@ const encouragements = [
 
 const dateFromKey = (value: string) => new Date(`${value}T12:00:00`);
 
+const CONTENT_DATE_STORAGE_KEY = "my-work-buddy-content-date-v1";
+
+const addDays = (value: Date, amount: number) => {
+  const next = new Date(value);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const readContentDateKey = (actualDateKey: string) => {
+  try {
+    const saved = window.localStorage.getItem(CONTENT_DATE_STORAGE_KEY);
+    return saved && saved >= actualDateKey ? saved : actualDateKey;
+  } catch {
+    return actualDateKey;
+  }
+};
+
 const PRACTICE_DRAFT_PREFIX = "my-work-buddy-practice-draft-v1:";
 
 const readPracticeDraft = <T,>(key: string): T | undefined => {
@@ -189,29 +207,36 @@ function usePracticeDraft<T>(key: string, initial: T) {
 
 const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set([
   ...state.completedTaskIds,
-  ...state.taskResults.filter((result) => result.dateKey === state.dateKey).map((result) => result.taskId),
+  ...state.taskResults.filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound).map((result) => result.taskId),
 ]));
 
 const formatDate = (value: string) => value.slice(5).replace("-", "/");
 
-export const generateArithmetic = (seedText: string, count = 20): ArithmeticQuestion[] => {
+export const generateArithmetic = (seedText: string, count = 20, excludedPrompts: string[] = []): ArithmeticQuestion[] => {
   let seed = [...seedText].reduce((sum, char) => sum + char.charCodeAt(0), 37);
+  const excluded = new Set(excludedPrompts);
+  const questions: ArithmeticQuestion[] = [];
+  const seen = new Set<string>();
   const next = () => {
     seed = Math.floor((seed * 1103515245 + 12345) % 2147483647);
     return seed;
   };
 
-  return Array.from({ length: count }, (_, index) => {
+  for (let index = 0; questions.length < count && index < count * 80; index += 1) {
     const isAdd = index % 3 !== 1;
     if (isAdd) {
       const a = 1 + (next() % 99);
       const b = 1 + (next() % (100 - a));
-      return { prompt: `${a} + ${b} =`, answer: a + b };
+      const question = { prompt: `${a} + ${b} =`, answer: a + b };
+      if (!excluded.has(question.prompt) && !seen.has(question.prompt)) { seen.add(question.prompt); questions.push(question); }
+      continue;
     }
     const a = 2 + (next() % 99);
     const b = 1 + (next() % (a - 1));
-    return { prompt: `${a} - ${b} =`, answer: a - b };
-  });
+    const question = { prompt: `${a} - ${b} =`, answer: a - b };
+    if (!excluded.has(question.prompt) && !seen.has(question.prompt)) { seen.add(question.prompt); questions.push(question); }
+  }
+  return questions;
 };
 
 export default function App() {
@@ -222,6 +247,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [showVictory, setShowVictory] = useState(false);
   const [parentSession, setParentSession] = useState<{ dateKey: string; pin: string } | null>(null);
+  const [contentDateKey, setContentDateKey] = useState(() => readContentDateKey(dateKey()));
   const notificationAttemptedDate = useRef<string | null>(null);
   const previousCloudBonus = useRef<boolean | null>(null);
 
@@ -252,6 +278,22 @@ export default function App() {
   }, [state.dateKey]);
 
   useEffect(() => {
+    if (contentDateKey < state.dateKey) {
+      setContentDateKey(state.dateKey);
+      return;
+    }
+    try {
+      window.localStorage.setItem(CONTENT_DATE_STORAGE_KEY, contentDateKey);
+    } catch {
+      // Content preview still works in memory when local storage is unavailable.
+    }
+  }, [contentDateKey, state.dateKey]);
+
+  useEffect(() => {
+    if (state.contentDateKey && state.contentDateKey > contentDateKey) setContentDateKey(state.contentDateKey);
+  }, [state.contentDateKey]);
+
+  useEffect(() => {
     if (!workspace.enabled || workspace.mode !== "ready") {
       previousCloudBonus.current = null;
       return;
@@ -277,9 +319,17 @@ export default function App() {
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
   const streak = calculateStreak(state.completedDates);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
-  const existingTaskResult = currentTask ? state.taskResults.find((result) => result.taskId === currentTask.id && result.dateKey === state.dateKey) : undefined;
+  const existingTaskResult = currentTask ? state.taskResults.find((result) => result.taskId === currentTask.id && result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound) : undefined;
   const dailyReadyForNotification = isDailyReadyForNotification(state, requiredTaskIds);
   const dailyReadyNotificationSent = state.notifiedDailyReadyDates.includes(state.dateKey);
+  const advanceContent = () => {
+    if (!window.confirm("确定切换到下一组新题目吗？\n\n每次切换都会开启新学习轮次，完成后可再次获得积分。")) return;
+    const nextContentDateKey = dateKey(addDays(dateFromKey(contentDateKey), 1));
+    setContentDateKey(nextContentDateKey);
+    setState((current) => advanceContentRound(current, nextContentDateKey));
+    if (workspace.enabled) void workspace.startContentRound(nextContentDateKey).catch(() => undefined);
+    setToast("已开启新学习轮次，完成新题目后可再次获得积分。");
+  };
 
   useEffect(() => {
     if (workspace.enabled || !dailyReadyForNotification || dailyReadyNotificationSent) return;
@@ -307,20 +357,21 @@ export default function App() {
   }, [dailyReadyForNotification, dailyReadyNotificationSent, state.dateKey, workspace.enabled]);
 
   const markTaskDone = (task: TaskDefinition, outcome: TaskOutcome) => {
+    const enrichedOutcome = { ...outcome, contentRound: state.contentRound, contentDateKey };
     if (workspace.enabled) {
-      void workspace.submitTask(task, outcome).then((result) => {
+      void workspace.submitTask(task, enrichedOutcome).then((result) => {
         setToast(result === "queued" ? `${task.shortTitle}已保存在本机，联网后会自动同步。` : task.completionMode === "parent" ? `${task.shortTitle}已提交，等待家长审核。` : `${task.shortTitle}完成，积分已同步。`);
       }).catch((submitError: unknown) => setToast(submitError instanceof Error ? submitError.message : "任务未能同步，请稍后再试。"));
       return;
     }
     if (task.completionMode === "parent") {
-      const nextState = submitTaskReview(state, task, outcome);
+      const nextState = submitTaskReview(state, task, enrichedOutcome);
       setState(nextState);
       setToast(`${task.shortTitle}已提交，等待家长今天统一审核。`);
       return;
     }
     const beforeBonus = state.bonusAwarded;
-    const nextState = completeTask(state, task.id, task.points, requiredTaskIds, outcome);
+    const nextState = completeTask(state, task.id, task.points, requiredTaskIds, enrichedOutcome);
     setState(nextState);
     setToast(`${task.shortTitle}完成，获得${task.points}积分。${encouragements[state.taskResults.length % encouragements.length]}`);
     if (!beforeBonus && nextState.bonusAwarded) setShowVictory(true);
@@ -356,19 +407,19 @@ export default function App() {
       </aside>
 
       <main className="main-area">
-        <TopBar points={state.points} progress={progress} completedCount={completedRequired} requiredCount={requiredTaskIds.length} streak={streak} backLabel={currentTask ? `返回${sectionMeta[currentTask.category].label}` : undefined} onBack={currentTask ? returnToSection : undefined} cloud={workspace} />
+        <TopBar points={state.points} progress={progress} completedCount={completedRequired} requiredCount={requiredTaskIds.length} streak={streak} backLabel={currentTask ? `返回${sectionMeta[currentTask.category].label}` : undefined} onBack={currentTask ? returnToSection : undefined} cloud={workspace} contentRound={state.contentRound} onAdvanceContent={advanceContent} />
         {toast ? <div className="toast" onAnimationEnd={() => setToast("")}>{toast}</div> : null}
 
         {currentTask ? (
-          <TaskPage task={currentTask} completed={completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible dateKey={state.dateKey} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
+          <TaskPage task={currentTask} completed={completedTaskIds.includes(currentTask.id)} existingResult={existingTaskResult} pending={state.pendingTaskReviews.some((review) => review.taskId === currentTask.id && (review.contentRound ?? 0) === state.contentRound)} syncPending={workspace.pendingTaskIds.includes(currentTask.id)} eligible dateKey={state.dateKey} contentDateKey={contentDateKey} contentRound={state.contentRound} masteredQuestionKeys={state.masteredQuestionKeys} onDone={(outcome) => markTaskDone(currentTask, outcome)} />
         ) : route.view === "home" ? (
-          <HomePage state={state} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
+          <HomePage state={state} contentDateKey={contentDateKey} requiredTaskIds={requiredTaskIds} syncPendingIds={workspace.pendingTaskIds} onOpenTask={openTask} />
         ) : route.view === "shop" ? (
           <ShopPage state={state} setState={setState} streak={streak} requiredTaskIds={requiredTaskIds} parentSession={parentSession} setParentSession={setParentSession} onVictory={() => setShowVictory(true)} cloud={workspace} />
         ) : route.view === "pet" ? (
           <PetPage state={state} setState={setState} cloud={workspace} onToast={setToast} />
         ) : (
-          <SectionPage view={route.view} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} onOpenTask={openTask} />
+          <SectionPage view={route.view} completedIds={completedTaskIds} pendingIds={state.pendingTaskReviews.map((review) => review.taskId)} syncPendingIds={workspace.pendingTaskIds} requiredTaskIds={requiredTaskIds} dateKey={state.dateKey} contentDateKey={contentDateKey} onOpenTask={openTask} />
         )}
       </main>
 
@@ -549,7 +600,7 @@ function CloudAccessGate({ workspace }: { workspace: CloudWorkspaceController })
   );
 }
 
-function TopBar({ points, progress, completedCount, requiredCount, streak, backLabel, onBack, cloud }: { points: number; progress: number; completedCount: number; requiredCount: number; streak: number; backLabel?: string; onBack?: () => void; cloud: CloudWorkspaceController }) {
+function TopBar({ points, progress, completedCount, requiredCount, streak, backLabel, onBack, cloud, contentRound, onAdvanceContent }: { points: number; progress: number; completedCount: number; requiredCount: number; streak: number; backLabel?: string; onBack?: () => void; cloud: CloudWorkspaceController; contentRound: number; onAdvanceContent: () => void }) {
   return (
     <header className="top-bar">
       <div className="top-bar-left">
@@ -564,6 +615,7 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
         <span><CheckCircle2 size={18} />{completedCount}/{requiredCount} 完成</span>
         <span>{progress}% 今日进度</span>
         <span>{streak} 天连续打卡</span>
+        <button className="content-refresh-button" type="button" title="切换新题并获得新一轮积分" aria-label="切换新题并获得新一轮积分" onClick={onAdvanceContent}><RefreshCw size={17} />更新新题 · {contentRound + 1}</button>
         {cloud.enabled ? <span className={`cloud-status ${cloud.syncStatus}`}>{cloud.syncStatus === "offline" ? <CloudOff size={17} /> : cloud.syncStatus === "syncing" ? <RefreshCw className="spin" size={17} /> : <Cloud size={17} />}{cloud.syncStatus === "synced" ? "已同步" : cloud.syncStatus === "syncing" ? "同步中" : cloud.syncStatus === "pending" ? "待同步" : "离线"}</span> : null}
         {cloud.enabled && cloud.role !== "child_device" ? <button className="top-icon-button" title="退出云端账号" aria-label="退出云端账号" onClick={() => void cloud.signOut()}><LogOut size={18} /></button> : null}
       </div>
@@ -571,7 +623,7 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
   );
 }
 
-function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { state: WorkspaceState; requiredTaskIds: string[]; syncPendingIds: string[]; onOpenTask: (taskId: string) => void }) {
+function HomePage({ state, contentDateKey, requiredTaskIds, syncPendingIds, onOpenTask }: { state: WorkspaceState; contentDateKey: string; requiredTaskIds: string[]; syncPendingIds: string[]; onOpenTask: (taskId: string) => void }) {
   const dailyTasks = requiredTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const optionalTasks = optionalTaskIds.map((id) => taskCatalog.find((task) => task.id === id)).filter((task): task is TaskDefinition => Boolean(task));
   const completedTaskIds = completedTaskIdsForToday(state);
@@ -579,8 +631,8 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
   const report = getWeeklyReport(state);
   const weeklyTarget = 250;
   const weeklyProgress = Math.min(100, Math.round((report.earnedPoints / weeklyTarget) * 100));
-  const weekContent = getWeeklyContent(dateFromKey(state.dateKey));
-  const schedule = getStudySchedule(dateFromKey(state.dateKey));
+  const weekContent = getWeeklyContent(dateFromKey(contentDateKey));
+  const schedule = getStudySchedule(dateFromKey(contentDateKey));
 
   return (
     <section>
@@ -608,7 +660,7 @@ function HomePage({ state, requiredTaskIds, syncPendingIds, onOpenTask }: { stat
   );
 }
 
-function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredTaskIds, dateKey, onOpenTask }: { view: TaskCategory; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; dateKey: string; onOpenTask: (taskId: string) => void }) {
+function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredTaskIds, dateKey, contentDateKey, onOpenTask }: { view: TaskCategory; completedIds: string[]; pendingIds: string[]; syncPendingIds: string[]; requiredTaskIds: string[]; dateKey: string; contentDateKey: string; onOpenTask: (taskId: string) => void }) {
   const tasks = taskCatalog.filter((task) => task.category === view);
   const meta = sectionMeta[view];
   return (
@@ -617,7 +669,7 @@ function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredT
         <img src={characterImages[meta.character]} alt="" />
         <div><p className="eyebrow">{curriculumNote}</p><h2>{meta.label}</h2></div>
       </div>
-      {view === "chinese" || view === "math" || view === "english" ? <SubjectDashboard view={view} dateKey={dateKey} tasks={tasks} completedIds={completedIds} /> : null}
+      {view === "chinese" || view === "math" || view === "english" ? <SubjectDashboard view={view} dateKey={contentDateKey} tasks={tasks} completedIds={completedIds} /> : null}
       <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
     </section>
   );
@@ -669,10 +721,10 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
   );
 }
 
-function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; onDone: (outcome: TaskOutcome) => void }) {
+function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, contentDateKey, contentRound, masteredQuestionKeys, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; contentDateKey: string; contentRound: number; masteredQuestionKeys: string[]; onDone: (outcome: TaskOutcome) => void }) {
   const directCompletion = task.completionMode === "auto" && task.minimumScore === 0;
   const initialOutcome = completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome;
-  const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(`task:${task.id}:${dateKey}`, initialOutcome);
+  const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(`task:${task.id}:${dateKey}:${contentRound}`, initialOutcome);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
 
@@ -686,7 +738,7 @@ function TaskPage({ task, completed, existingResult, pending, syncPending, eligi
           <p>{encouragements[taskCatalog.indexOf(task) % encouragements.length]}</p>
         </div>
       </div>
-      <TaskContent task={task} dateKey={dateKey} existingResult={existingResult} onProgress={setOutcome} />
+      <TaskContent task={task} dateKey={contentDateKey} existingResult={existingResult} masteredQuestionKeys={masteredQuestionKeys} onProgress={setOutcome} />
       <div className="finish-bar">
         <p className={outcome.ready && eligible ? "answer" : "muted"}>{completed ? "今天已经获得过这项积分。" : syncPending ? "任务已保存在本机，联网后同步并结算正式积分。" : pending ? "已经提交到今日家长审核，批准后自动发放积分。" : !eligible ? "今天可以自由练习，这项不计入今日积分。" : outcome.message ?? completionHint(task)}</p>
         <button className="primary big" disabled={!canComplete} onClick={() => onDone({
@@ -706,7 +758,7 @@ function completionHint(task: TaskDefinition) {
   return `正确率达到${task.minimumScore ?? 80}%后解锁积分。`;
 }
 
-function TaskContent({ task, dateKey, existingResult, onProgress }: { task: TaskDefinition; dateKey: string; existingResult?: TaskResult; onProgress: (outcome: TaskOutcome) => void }) {
+function TaskContent({ task, dateKey, existingResult, masteredQuestionKeys, onProgress }: { task: TaskDefinition; dateKey: string; existingResult?: TaskResult; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
   switch (task.id) {
     case "chinese-morning-reading": return <MorningReading dateKey={dateKey} />;
     case "chinese-preview-copybook": return <CopybookPreview dateKey={dateKey} onProgress={onProgress} />;
@@ -715,14 +767,14 @@ function TaskContent({ task, dateKey, existingResult, onProgress }: { task: Task
     case "chinese-night-reading": return <NightReading dateKey={dateKey} />;
     case "chinese-picture-writing": return <PictureWriting dateKey={dateKey} onProgress={onProgress} />;
     case "chinese-reading-comprehension": return <ReadingComprehensionPanel dateKey={dateKey} onProgress={onProgress} />;
-    case "math-arithmetic": return <Arithmetic dateKey={dateKey} existingResult={existingResult} onProgress={onProgress} />;
-    case "math-multiply-divide": return <MultiplyDivide dateKey={dateKey} onProgress={onProgress} />;
-    case "math-word-problems": return <WordProblems dateKey={dateKey} onProgress={onProgress} />;
+    case "math-arithmetic": return <Arithmetic dateKey={dateKey} existingResult={existingResult} masteredQuestionKeys={masteredQuestionKeys} onProgress={onProgress} />;
+    case "math-multiply-divide": return <MultiplyDivide dateKey={dateKey} masteredQuestionKeys={masteredQuestionKeys} onProgress={onProgress} />;
+    case "math-word-problems": return <WordProblems dateKey={dateKey} masteredQuestionKeys={masteredQuestionKeys} onProgress={onProgress} />;
     case "english-daily": return <EnglishDaily dateKey={dateKey} />;
     case "sport-rope":
     case "sport-high-jump":
     case "sport-hour": return <SportTask taskId={task.id} dateKey={dateKey} onProgress={onProgress} />;
-    default: return <GameTask key={`${task.id}-${dateKey}`} taskId={task.id} dateKey={dateKey} onProgress={onProgress} />;
+    default: return <GameTask key={`${task.id}-${dateKey}`} taskId={task.id} dateKey={dateKey} masteredQuestionKeys={masteredQuestionKeys} onProgress={onProgress} />;
   }
 }
 
@@ -961,8 +1013,8 @@ function ReadingComprehensionPanel({ dateKey, onProgress }: { dateKey: string; o
   return <div className="panel"><h3>{item.title}</h3>{item.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}{item.questions.map((question) => <div className="question" key={question.id}><p>{question.prompt}</p>{question.options ? question.options.map((option) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => changeAnswer(question.id, option)} />{option}</label>) : <input value={answers[question.id] ?? ""} onChange={(event) => changeAnswer(question.id, event.target.value)} placeholder="用一句话回答" />}{checked && missingHints[question.id]?.length ? <p className="gentle-retry">还缺少这些要点：{missingHints[question.id].join("、")}</p> : null}{checked ? <p className="answer">参考答案：{question.answer}。{question.explanation}</p> : null}</div>)}<button className="secondary" onClick={check}>核对答案解析</button></div>;
 }
 
-function Arithmetic({ dateKey, existingResult, onProgress }: { dateKey: string; existingResult?: TaskResult; onProgress: (outcome: TaskOutcome) => void }) {
-  const questions = useMemo(() => generateArithmetic(dateKey, 20), [dateKey]);
+function Arithmetic({ dateKey, existingResult, masteredQuestionKeys, onProgress }: { dateKey: string; existingResult?: TaskResult; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
+  const questions = useMemo(() => generateArithmetic(dateKey, 20, masteredQuestionKeys), [dateKey, masteredQuestionKeys]);
   const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`arithmetic:${dateKey}:answers`, Object.fromEntries(Object.entries(existingResult?.answers ?? {}).map(([index, answer]) => [Number(index), answer])));
   const [attempts, setAttempts] = usePracticeDraft<number>(`arithmetic:${dateKey}:attempts`, 0);
   const [initialWrongIndices, setInitialWrongIndices] = usePracticeDraft<number[] | null>(`arithmetic:${dateKey}:initial-wrong`, null);
@@ -979,14 +1031,14 @@ function Arithmetic({ dateKey, existingResult, onProgress }: { dateKey: string; 
       const firstScore = arithmeticScore(questions.length, wrong.length);
       setInitialWrongIndices(wrong);
       setRetryIndices(wrong);
-      onProgress({ ready: wrong.length === 0, score: firstScore, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((wrongIndex) => questions[wrongIndex].prompt), answers: answerSnapshot, message: wrong.length ? `首次正确率${firstScore}%，请完成${wrong.length}道错题重练。` : "20道全部答对，可以完成任务。" });
+      onProgress({ ready: wrong.length === 0, score: firstScore, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong.map((wrongIndex) => questions[wrongIndex].prompt), correctQuestions: questions.filter((_, index) => !wrong.includes(index)).map((question) => question.prompt), answers: answerSnapshot, message: wrong.length ? `首次正确率${firstScore}%，请完成${wrong.length}道错题重练。` : "20道全部答对，可以完成任务。" });
       return;
     }
     const unresolved = findWrongArithmeticIndices(questions, answers, retryIndices);
     const firstScore = arithmeticScore(questions.length, initialWrongIndices.length);
     const score = arithmeticScore(questions.length, unresolved.length);
     setRetryIndices(unresolved);
-    onProgress({ ready: unresolved.length === 0, score, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: initialWrongIndices.map((wrongIndex) => questions[wrongIndex].prompt), answers: answerSnapshot, message: unresolved.length ? `已经改对一些，还有${unresolved.length}道再算一次。` : "错题已经全部改对，可以完成任务。" });
+    onProgress({ ready: unresolved.length === 0, score, firstScore, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: initialWrongIndices.map((wrongIndex) => questions[wrongIndex].prompt), correctQuestions: questions.filter((_, index) => !unresolved.includes(index)).map((question) => question.prompt), answers: answerSnapshot, message: unresolved.length ? `已经改对一些，还有${unresolved.length}道再算一次。` : "错题已经全部改对，可以完成任务。" });
   };
   return <div className="panel"><h3>{initialWrongIndices === null ? "100以内正整数加减法 20道" : retryIndices.length ? `错题专项重练 ${retryIndices.length}道` : "错题全部改对"}</h3>{displayedIndices.length ? <div className="arithmetic-grid">{displayedIndices.map((questionIndex) => { const question = questions[questionIndex]; return <label key={`${question.prompt}-${questionIndex}`}><span>{question.prompt}</span><input type="number" inputMode="numeric" pattern="[0-9]*" min="0" step="1" value={answers[questionIndex] ?? ""} onChange={(event) => setAnswers((current) => ({ ...current, [questionIndex]: event.target.value.replace(/\D/g, "") }))} /></label>; })}</div> : <div className="mastery-finish"><CheckCircle2 size={30} /><strong>每一道错题都认真改正啦</strong></div>}<button className="primary" disabled={!allDisplayedAnswersFilled || (initialWrongIndices !== null && retryIndices.length === 0)} onClick={check}>{initialWrongIndices === null ? "核对答案" : "核对错题"}</button></div>;
 }
@@ -1009,27 +1061,35 @@ interface AutoPracticeItem {
   isCorrect?: (input: string) => boolean;
 }
 
-function AutoPractice({ title, items, guide, placeholder = "写答案", draftKey, onProgress }: { title: string; items: AutoPracticeItem[]; guide?: string; placeholder?: string; draftKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+function AutoPractice({ title, items, guide, placeholder = "写答案", draftKey, masteredQuestionKeys = [], onProgress }: { title: string; items: AutoPracticeItem[]; guide?: string; placeholder?: string; draftKey: string; masteredQuestionKeys?: string[]; onProgress: (outcome: TaskOutcome) => void }) {
+  const freshItems = useMemo(() => {
+    const remaining = items.filter((item) => !masteredQuestionKeys.includes(item.prompt));
+    return remaining.length ? remaining : items;
+  }, [items, masteredQuestionKeys]);
   const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`${draftKey}:answers`, {});
   const [checked, setChecked] = usePracticeDraft<boolean>(`${draftKey}:checked`, false);
   const [attempts, setAttempts] = usePracticeDraft<number>(`${draftKey}:attempts`, 0);
   const check = () => {
-    const wrong = items.map((item, index) => (item.isCorrect?.(answers[index] ?? "") ?? answerMatches(answers[index] ?? "", item.answer)) ? "" : item.prompt).filter(Boolean);
-    const score = Math.round(((items.length - wrong.length) / items.length) * 100);
+    const wrong = freshItems.map((item, index) => (item.isCorrect?.(answers[index] ?? "") ?? answerMatches(answers[index] ?? "", item.answer)) ? "" : item.prompt).filter(Boolean);
+    const score = Math.round(((freshItems.length - wrong.length) / freshItems.length) * 100);
     const nextAttempts = attempts + 1;
     setChecked(true);
     setAttempts(nextAttempts);
-    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再试一次会更好。` });
+    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, correctQuestions: freshItems.filter((item) => !wrong.includes(item.prompt)).map((item) => item.prompt), message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再试一次会更好。` });
   };
   const changeAnswer = (index: number, value: string) => {
     setAnswers((current) => ({ ...current, [index]: value }));
     setChecked(false);
     onProgress({ ...emptyOutcome, attempts, message: "答案已修改，请重新核对。" });
   };
-  return <div className="panel"><h3>{title}</h3>{guide ? <p className="practice-guide">{guide}</p> : null}{items.map(({ prompt, answer }, index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder={placeholder} />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+  return <div className="panel"><h3>{title}</h3>{guide ? <p className="practice-guide">{guide}</p> : null}{freshItems.map(({ prompt, answer }, index) => <div className="question" key={`${prompt}-${index}`}><p>{prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder={placeholder} />{checked ? <p className="answer">答案：{answer}</p> : null}</div>)}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
-function WordProblemPractice({ items, guide, draftKey, onProgress }: { items: AutoPracticeItem[]; guide: string; draftKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+function WordProblemPractice({ items, guide, draftKey, masteredQuestionKeys = [], onProgress }: { items: AutoPracticeItem[]; guide: string; draftKey: string; masteredQuestionKeys?: string[]; onProgress: (outcome: TaskOutcome) => void }) {
+  const freshItems = useMemo(() => {
+    const remaining = items.filter((item) => !masteredQuestionKeys.includes(item.prompt));
+    return remaining.length ? remaining : items;
+  }, [items, masteredQuestionKeys]);
   const [answers, setAnswers] = usePracticeDraft<Record<number, string>>(`${draftKey}:answers`, {});
   const [checked, setChecked] = usePracticeDraft<boolean>(`${draftKey}:checked`, false);
   const [attempts, setAttempts] = usePracticeDraft<number>(`${draftKey}:attempts`, 0);
@@ -1044,17 +1104,17 @@ function WordProblemPractice({ items, guide, draftKey, onProgress }: { items: Au
     changeAnswer(index, `${withoutUnit}（${unit}）`);
   };
   const check = () => {
-    const wrong = items.map((item, index) => item.isCorrect?.(answers[index] ?? "") ? "" : item.prompt).filter(Boolean);
-    const score = Math.round(((items.length - wrong.length) / items.length) * 100);
+    const wrong = freshItems.map((item, index) => item.isCorrect?.(answers[index] ?? "") ? "" : item.prompt).filter(Boolean);
+    const score = Math.round(((freshItems.length - wrong.length) / freshItems.length) * 100);
     const nextAttempts = attempts + 1;
     setChecked(true);
     setAttempts(nextAttempts);
-    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再检查算式和单位。` });
+    onProgress({ ready: score >= 80, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions: wrong, correctQuestions: freshItems.filter((item) => !wrong.includes(item.prompt)).map((item) => item.prompt), message: score >= 80 ? `正确率${score}%，已经达标。` : `正确率${score}%，再检查算式和单位。` });
   };
-  return <div className="panel"><h3>生活化应用题</h3><p className="practice-guide">{guide}</p>{items.map((item, index) => { const unit = item.answer.match(/[（(]([\u4e00-\u9fff]+)[）)]$/)?.[1]; return <div className="question" key={`${item.prompt}-${index}`}><p>{item.prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder="例如：18+7=25" />{unit ? <div className="unit-picker" aria-label="选择答案单位"><span>答案单位：</span><button type="button" className="secondary" onClick={() => appendUnit(index, unit)}>（{unit}）</button></div> : null}{checked ? <p className="answer">答案：{item.answer}</p> : null}</div>; })}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
+  return <div className="panel"><h3>生活化应用题</h3><p className="practice-guide">{guide}</p>{freshItems.map((item, index) => { const unit = item.answer.match(/[（(]([\u4e00-\u9fff]+)[）)]$/)?.[1]; return <div className="question" key={`${item.prompt}-${index}`}><p>{item.prompt}</p><input value={answers[index] ?? ""} onChange={(event) => changeAnswer(index, event.target.value)} placeholder="例如：18+7=25" />{unit ? <div className="unit-picker" aria-label="选择答案单位"><span>答案单位：</span><button type="button" className="secondary" onClick={() => appendUnit(index, unit)}>（{unit}）</button></div> : null}{checked ? <p className="answer">答案：{item.answer}</p> : null}</div>; })}<button className="secondary" onClick={check}>{attempts ? "重新核对" : "核对答案"}</button></div>;
 }
 
-function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+function MultiplyDivide({ dateKey, masteredQuestionKeys, onProgress }: { dateKey: string; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
   const daySeed = Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000);
   const facts = Array.from({ length: 30 }, (_, index) => ({ first: 1 + (index % 6), second: 1 + Math.floor(index / 6) }));
   const selected = Array.from({ length: 5 }, (_, index) => facts[(daySeed * 5 + index) % facts.length]);
@@ -1062,14 +1122,14 @@ function MultiplyDivide({ dateKey, onProgress }: { dateKey: string; onProgress: 
     { prompt: `${first} × ${second} =`, answer: String(first * second) },
     { prompt: `${first * second} ÷ ${first} =`, answer: String(second) },
   ]);
-  return <AutoPractice title="1–6乘法口诀 · 每日10题" draftKey={`multiply-divide:${dateKey}`} onProgress={onProgress} items={items} />;
+  return <AutoPractice title="1–6乘法口诀 · 每日10题" draftKey={`multiply-divide:${dateKey}`} masteredQuestionKeys={masteredQuestionKeys} onProgress={onProgress} items={items} />;
 }
 
-function WordProblems({ dateKey, onProgress }: { dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
+function WordProblems({ dateKey, masteredQuestionKeys, onProgress }: { dateKey: string; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
   const offset = (Math.floor(Date.UTC(dateFromKey(dateKey).getFullYear(), dateFromKey(dateKey).getMonth(), dateFromKey(dateKey).getDate()) / 86400000) * 5) % wordProblems.length;
   const items = [...wordProblems.slice(offset), ...wordProblems.slice(0, offset)].slice(0, 5).map((problem) => ({ prompt: problem.prompt, answer: problem.answer, isCorrect: (input: string) => wordProblemAnswerMatches(input, problem) }));
-  if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" draftKey={`word-problems:${dateKey}`} onProgress={onProgress} />;
-  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" draftKey={`word-problems:${dateKey}`} items={items} onProgress={onProgress} />;
+  if (items.some((item) => /[（(][\u4e00-\u9fff]+[）)]$/.test(item.answer))) return <WordProblemPractice items={items} masteredQuestionKeys={masteredQuestionKeys} guide="每题都要列出完整算式，点击单位按钮把单位追加到得数后面。" draftKey={`word-problems:${dateKey}`} onProgress={onProgress} />;
+  return <AutoPractice title="生活化应用题" guide="每题都要列出完整算式，并在得数后写上单位。" placeholder="例如：18+7=25（张）" draftKey={`word-problems:${dateKey}`} masteredQuestionKeys={masteredQuestionKeys} items={items} onProgress={onProgress} />;
 }
 
 function EnglishDaily({ dateKey }: { dateKey: string }) {
@@ -1281,8 +1341,8 @@ function EnglishSentenceTrain({ lesson, dateKey }: { lesson: ReturnType<typeof g
   );
 }
 
-function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: string; onProgress: (outcome: TaskOutcome) => void }) {
-  const challenges = useMemo(() => getGameChallenges(taskId, dateFromKey(dateKey)), [taskId, dateKey]);
+function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskId: string; dateKey: string; masteredQuestionKeys: string[]; onProgress: (outcome: TaskOutcome) => void }) {
+  const challenges = useMemo(() => getGameChallenges(taskId, dateFromKey(dateKey), 8, masteredQuestionKeys), [taskId, dateKey, masteredQuestionKeys]);
   const [roundIndex, setRoundIndex] = usePracticeDraft<number>(`game:${taskId}:${dateKey}:round`, 0);
   const [selected, setSelected] = usePracticeDraft<string>(`game:${taskId}:${dateKey}:selected`, "");
   const [roundMissed, setRoundMissed] = usePracticeDraft<boolean>(`game:${taskId}:${dateKey}:missed`, false);
@@ -1334,7 +1394,7 @@ function GameTask({ taskId, dateKey, onProgress }: { taskId: string; dateKey: st
       const ready = true;
       setFinalScore(score);
       setFinished(true);
-      onProgress({ ready, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions, message: ready ? `首次答对${nextFirstTryCorrect}关，成功获得积分资格！` : `首次答对${nextFirstTryCorrect}关，再玩一次就能进步。` });
+      onProgress({ ready, score, durationSeconds: 0, attempts: nextAttempts, wrongQuestions, correctQuestions: challenges.map((item) => item.question), message: ready ? `首次答对${nextFirstTryCorrect}关，成功获得积分资格！` : `首次答对${nextFirstTryCorrect}关，再玩一次就能进步。` });
     }
   };
 

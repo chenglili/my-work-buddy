@@ -1,5 +1,5 @@
 begin;
-select plan(64);
+select plan(66);
 
 select is((select count(*) from public.task_definitions), 18::bigint, 'all task rules are seeded');
 select is((select count(*) from public.reward_definitions), 3::bigint, 'all reward prices are seeded');
@@ -78,7 +78,9 @@ select ok((select relrowsecurity from pg_class where oid = 'public.pet_profiles'
 
 select ok(has_function_privilege('authenticated', 'public.submit_task(uuid,date,text,jsonb,timestamptz)', 'EXECUTE'), 'authenticated devices can submit dated offline tasks through the RPC');
 select hasnt_function('public', 'submit_task', array['uuid', 'date', 'text', 'jsonb'], 'the obsolete same-day submit RPC is removed');
-select ok(position('p_date_key < v_today - 6' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'offline task sync is limited to seven calendar days');
+select ok(position('p_date_key < v_today - 6' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) = 0, 'task point earning is not limited to a seven day window');
+select ok(has_function_privilege('authenticated', 'public.start_content_round(uuid,date)', 'EXECUTE'), 'authenticated devices can start a new content round');
+select ok(position('content_round' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'task submission is keyed by content round');
 select ok(position('v_completed_date <> p_date_key' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) > 0, 'offline completion timestamp must match its task date');
 select ok(position('task is not scheduled' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) = 0, 'all point earning tasks can be submitted');
 select ok(position('optional tasks are locked' in pg_get_functiondef('public.submit_task(uuid,date,text,jsonb,timestamptz)'::regprocedure)) = 0, 'optional point earning tasks are not gated by the daily plan');

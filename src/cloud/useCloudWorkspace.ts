@@ -33,12 +33,15 @@ export const summarizeLegacyWorkspace = (legacy: WorkspaceState): LegacyImportPr
 });
 
 const cleanResult = (result: CompletionResultInput): CompletionResultInput => ({
+  contentRound: result.contentRound ?? 0,
+  contentDateKey: result.contentDateKey,
   score: result.score,
   firstScore: result.firstScore,
   durationSeconds: result.durationSeconds ?? 0,
   attempts: result.attempts ?? 1,
   wrongQuestions: result.wrongQuestions ?? [],
   answers: result.answers,
+  correctQuestions: result.correctQuestions,
   evidence: result.evidence,
 });
 
@@ -83,7 +86,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
 
   const refreshPendingTaskIds = useCallback(async (userId: string) => {
     const commands = await readTaskOutbox(userId);
-    setPendingTaskIds(Array.from(new Set(commands.filter((command) => command.dateKey === activeDateKeyRef.current).map((command) => command.taskId))));
+    setPendingTaskIds(Array.from(new Set(commands.filter((command) => command.dateKey === activeDateKeyRef.current && (command.contentRound ?? command.result.contentRound ?? 0) === stateRef.current.contentRound).map((command) => command.taskId))));
     return commands;
   }, []);
 
@@ -472,14 +475,15 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     if (!session) throw new Error("请先登录或配对设备。");
     const clean = cleanResult(result);
     if (!payload) throw new Error("云端工作台尚未准备完成。");
-    const existing = (await readTaskOutbox(session.user.id)).find((command) => command.dateKey === state.dateKey && command.taskId === task.id);
+    const round = clean.contentRound ?? state.contentRound;
+    const existing = (await readTaskOutbox(session.user.id)).find((command) => command.dateKey === state.dateKey && command.taskId === task.id && (command.contentRound ?? command.result.contentRound ?? 0) === round);
     if (existing) {
       setPendingTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
       setSyncStatus(navigator.onLine ? "syncing" : "pending");
       if (navigator.onLine) void flushOutbox();
       return "queued";
     }
-    const queued: QueuedTaskCommand = { commandId: commandId(), userId: session.user.id, type: "submit_task", dateKey: state.dateKey, taskId: task.id, result: clean, createdAt: new Date().toISOString() };
+    const queued: QueuedTaskCommand = { commandId: commandId(), userId: session.user.id, type: "submit_task", dateKey: state.dateKey, taskId: task.id, contentRound: round, result: clean, createdAt: new Date().toISOString() };
     await enqueueTaskCommand(queued);
     setPendingTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
     if (!navigator.onLine) {
@@ -502,7 +506,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
       await refreshFromCloud();
       throw submitError instanceof Error ? submitError : new Error(errorMessage(submitError));
     }
-  }, [flushOutbox, invokeNotification, payload, refreshFromCloud, refreshPendingTaskIds, state.dateKey, syncQueuedCommand]);
+  }, [flushOutbox, invokeNotification, payload, refreshFromCloud, refreshPendingTaskIds, state.contentRound, state.dateKey, syncQueuedCommand]);
 
   const runMutation = useCallback(async (name: string, args: Record<string, unknown>) => {
     const session = sessionRef.current;
@@ -517,6 +521,10 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     await applyPayload(session.user.id, data);
     await invokeNotification();
   }, [applyPayload, invokeNotification]);
+
+  const startContentRound = useCallback(async (contentDateKey: string) => {
+    await runMutation("start_content_round", { p_content_date_key: contentDateKey });
+  }, [runMutation]);
 
   const createPairCode = useCallback(async () => {
     if (!supabase || payload?.role !== "parent" || !navigator.onLine) throw new Error("请使用联网的家长设备操作。");
@@ -558,6 +566,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     signOut,
     refresh,
     refreshLocalDate,
+    startContentRound,
     confirmLegacyImport,
     submitTask,
     reviewTask: (reviewId, action) => runMutation("review_task", { p_review_id: reviewId, p_action: action }),

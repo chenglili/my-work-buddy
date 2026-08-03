@@ -281,15 +281,16 @@ export const getStudySchedule = (value = new Date()) => {
       dateRange: `8月${unit.start}日–${unit.end}日`,
       daysUntilSchool: Math.max(1, Math.ceil((schoolDate.getTime() - value.getTime()) / 86400000)),
       isSummerPlan: true,
+      isUnitTest: false,
     };
   }
 
   if (value.getMonth() === 8 && value.getDate() === 1) {
-    return { unitIndex: 7, dayInUnit: 3, stageLabel: "开学回顾", dateRange: "9月1日", daysUntilSchool: 0, isSummerPlan: true };
+    return { unitIndex: 7, dayInUnit: 3, stageLabel: "开学回顾", dateRange: "9月1日", daysUntilSchool: 0, isSummerPlan: true, isUnitTest: true };
   }
 
   const unitIndex = Math.floor(dayNumber(value) / 7) % 8;
-  return { unitIndex, dayInUnit: value.getDay(), stageLabel: stageLabels[value.getDay() % stageLabels.length], dateRange: `第${unitIndex + 1}周`, daysUntilSchool: 0, isSummerPlan: false };
+  return { unitIndex, dayInUnit: value.getDay(), stageLabel: stageLabels[value.getDay() % stageLabels.length], dateRange: `第${unitIndex + 1}周`, daysUntilSchool: 0, isSummerPlan: false, isUnitTest: value.getMonth() > 7 };
 };
 
 const augustRotationPlan = [
@@ -650,6 +651,26 @@ const rotateContent = <T,>(items: T[], offset: number) => [...items.slice(offset
 export const getWeeklyContent = (value = new Date()) => {
   const schedule = getStudySchedule(value);
   const content = weeklyContent[schedule.unitIndex % weeklyContent.length];
+  if (schedule.isUnitTest) {
+    const offset = dayNumber(value) % content.words.length;
+    return {
+      ...content,
+      theme: "随机单元测试",
+      readingTitle: "随机单元阅读测试",
+      words: rotateContent(content.words, offset),
+      dictation: rotateContent(content.dictation, dayNumber(value) % content.dictation.length),
+      memorization: rotateContent(content.memorization, dayNumber(value) % content.memorization.length),
+      picture: { ...content.picture, title: "随机看图写话测试" },
+      english: {
+        ...content.english,
+        unit: "Unit Review",
+        title: "随机单元听读测试",
+        words: rotateContent(content.english.words, dayNumber(value) % content.english.words.length),
+        patterns: rotateContent(content.english.patterns, dayNumber(value) % content.english.patterns.length),
+        tasks: rotateContent(content.english.tasks, dayNumber(value) % content.english.tasks.length),
+      },
+    };
+  }
   if (schedule.dayInUnit === 0) return content;
 
   const wordOffset = schedule.dayInUnit % content.words.length;
@@ -832,9 +853,11 @@ export const getGameChallenge = (taskId: string, value = new Date()) => {
   return getGameChallenges(taskId, value, 1)[0];
 };
 
-export const getGameChallenges = (taskId: string, value = new Date(), count = 8) => {
+export const getGameChallenges = (taskId: string, value = new Date(), count = 8, excludedQuestions: string[] = []) => {
   const bank = gameQuestionBanks[taskId] ?? [];
   if (!bank.length) return [];
   const start = (dayNumber(value) * count) % bank.length;
-  return Array.from({ length: Math.min(count, bank.length) }, (_, index) => bank[(start + index) % bank.length]);
+  const excluded = new Set(excludedQuestions);
+  const remaining = Array.from({ length: bank.length }, (_, index) => bank[(start + index) % bank.length]).filter((challenge) => !excluded.has(challenge.question));
+  return (remaining.length ? remaining : bank).slice(0, Math.min(count, bank.length));
 };

@@ -3,6 +3,7 @@ import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule
 import { generateArithmetic, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
+  advanceContentRound,
   approveAllTaskReviews,
   approveReward,
   approveTaskReview,
@@ -84,6 +85,26 @@ describe("daily task planning", () => {
     expect(getStudySchedule(day("2026-08-31"))).toMatchObject({ unitIndex: 7, stageLabel: "小复习闯关", daysUntilSchool: 1 });
     expect(getStudySchedule(day("2026-09-01"))).toMatchObject({ unitIndex: 7, stageLabel: "开学回顾", daysUntilSchool: 0 });
   });
+
+  it("generates new arithmetic prompts without mastered prompts", () => {
+    const first = generateArithmetic("round-a", 20);
+    const next = generateArithmetic("round-b", 20, first.map((item) => item.prompt));
+    expect(next).toHaveLength(20);
+    expect(next.map((item) => item.prompt)).not.toEqual(expect.arrayContaining(first.map((item) => item.prompt)));
+  });
+
+  it("switches to deterministic random unit review content after the summer units", () => {
+    const review = getWeeklyContent(day("2026-09-01"));
+    expect(getStudySchedule(day("2026-09-01"))).toMatchObject({ isUnitTest: true });
+    expect(review.theme).toBe("随机单元测试");
+  });
+
+  it("skips mastered game questions while the bank still has fresh questions", () => {
+    const first = getGameChallenges("game-number", day("2026-08-01"), 5);
+    const next = getGameChallenges("game-number", day("2026-08-02"), 5, first.map((item) => item.question));
+    expect(next).toHaveLength(5);
+    expect(next.map((item) => item.question)).not.toEqual(expect.arrayContaining(first.map((item) => item.question)));
+  });
 });
 
 describe("workspace state", () => {
@@ -100,6 +121,19 @@ describe("workspace state", () => {
     expect(finished.completedDates).toEqual(["2026-07-31"]);
     expect(finished.weeklyPoints["2026-07-27"]).toBe(26);
     expect(finished.dailyEarnedPoints["2026-07-31"]).toBe(26);
+  });
+
+  it("awards the same task again only after a new content round", () => {
+    const today = day("2026-08-01");
+    const first = completeTask(initialWorkspaceState(today), "math-arithmetic", 5, ["math-arithmetic"], { score: 100 }, today);
+    const duplicate = completeTask(first, "math-arithmetic", 5, ["math-arithmetic"], { score: 100 }, today);
+    const nextRound = advanceContentRound(first, "2026-08-02", today);
+    const second = completeTask(nextRound, "math-arithmetic", 5, ["math-arithmetic"], { score: 100 }, today);
+
+    expect(duplicate.points).toBe(first.points);
+    expect(second.points).toBe(first.points + 5);
+    expect(second.contentRound).toBe(1);
+    expect(second.taskResults).toHaveLength(2);
   });
 
   it("stores score, duration, attempts, wrong questions and completion time", () => {

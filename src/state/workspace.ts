@@ -35,12 +35,14 @@ export const petItemDefinitions: PetItemDefinition[] = [
 export interface TaskResult {
   taskId: string;
   dateKey: string;
+  contentRound?: number;
   score?: number;
   firstScore?: number;
   durationSeconds: number;
   attempts: number;
   wrongQuestions: string[];
   answers?: Record<string, string>;
+  correctQuestions?: string[];
   evidence?: string;
   completedAt: string;
 }
@@ -51,6 +53,7 @@ export interface PendingTaskReview {
   taskTitle: string;
   points: number;
   dateKey: string;
+  contentRound?: number;
   result: CompletionResultInput;
   submittedAt: string;
 }
@@ -72,6 +75,8 @@ export interface RewardRequest {
 
 export interface WorkspaceState {
   dateKey: string;
+  contentDateKey: string;
+  contentRound: number;
   points: number;
   pet: PetState;
   completedTaskIds: string[];
@@ -83,6 +88,7 @@ export interface WorkspaceState {
   dailyEarnedPoints: Record<string, number>;
   rewardRequests: RewardRequest[];
   notifiedDailyReadyDates: string[];
+  masteredQuestionKeys: string[];
 }
 
 interface LegacyWorkspaceState {
@@ -95,12 +101,15 @@ interface LegacyWorkspaceState {
 }
 
 export interface CompletionResultInput {
+  contentRound?: number;
+  contentDateKey?: string;
   score?: number;
   firstScore?: number;
   durationSeconds?: number;
   attempts?: number;
   wrongQuestions?: string[];
   answers?: Record<string, string>;
+  correctQuestions?: string[];
   evidence?: string;
 }
 
@@ -151,6 +160,8 @@ const refreshPetProfile = (pet: PetState, today = new Date()): PetState => {
 
 export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   dateKey: dateKey(today),
+  contentDateKey: dateKey(today),
+  contentRound: 0,
   points: 0,
   pet: initialPetState(today),
   completedTaskIds: [],
@@ -162,6 +173,7 @@ export const initialWorkspaceState = (today = new Date()): WorkspaceState => ({
   dailyEarnedPoints: {},
   rewardRequests: [],
   notifiedDailyReadyDates: [],
+  masteredQuestionKeys: [],
 });
 
 export const refreshPetState = (state: WorkspaceState, today = new Date()): WorkspaceState => {
@@ -177,8 +189,21 @@ export const refreshDailyState = (state: WorkspaceState, today = new Date()): Wo
   return {
     ...freshState,
     dateKey: todayKey,
+    contentDateKey: freshState.contentDateKey >= todayKey ? freshState.contentDateKey : todayKey,
+    contentRound: 0,
     completedTaskIds: [],
     bonusAwarded: false,
+    pendingTaskReviews: [],
+  };
+};
+
+export const advanceContentRound = (state: WorkspaceState, nextContentDateKey: string, now = new Date()): WorkspaceState => {
+  const freshState = refreshDailyState(state, now);
+  return {
+    ...freshState,
+    contentDateKey: nextContentDateKey,
+    contentRound: freshState.contentRound + 1,
+    completedTaskIds: [],
     pendingTaskReviews: [],
   };
 };
@@ -264,23 +289,26 @@ export const completeTask = (
   today = new Date(),
 ): WorkspaceState => {
   const freshState = refreshDailyState(state, today);
-  if (freshState.completedTaskIds.includes(taskId)) return freshState;
+  const round = result.contentRound ?? freshState.contentRound;
+  const todayKey = dateKey(today);
+  if (freshState.completedTaskIds.includes(taskId) || freshState.taskResults.some((item) => item.taskId === taskId && item.dateKey === todayKey && (item.contentRound ?? 0) === round)) return freshState;
 
   const completedTaskIds = [...freshState.completedTaskIds, taskId];
   const allDone = requiredTaskIds.every((id) => completedTaskIds.includes(id));
   const shouldAwardBonus = allDone && !freshState.bonusAwarded;
-  const todayKey = dateKey(today);
   const awardedPoints = reward + (shouldAwardBonus ? 15 : 0);
   const currentWeek = weekKey(today);
   const taskResult: TaskResult = {
     taskId,
     dateKey: todayKey,
+    contentRound: round,
     score: result.score,
     firstScore: result.firstScore,
     durationSeconds: result.durationSeconds ?? 0,
     attempts: result.attempts ?? 1,
     wrongQuestions: result.wrongQuestions ?? [],
     answers: result.answers,
+    correctQuestions: result.correctQuestions,
     evidence: result.evidence,
     completedAt: today.toISOString(),
   };
@@ -294,6 +322,7 @@ export const completeTask = (
       ? Array.from(new Set([...freshState.completedDates, todayKey])).sort()
       : freshState.completedDates,
     taskResults: [...freshState.taskResults, taskResult],
+    masteredQuestionKeys: Array.from(new Set([...freshState.masteredQuestionKeys, ...(result.correctQuestions ?? [])])),
     weeklyPoints: {
       ...freshState.weeklyPoints,
       [currentWeek]: (freshState.weeklyPoints[currentWeek] ?? 0) + awardedPoints,
@@ -312,16 +341,18 @@ export const submitTaskReview = (
   now = new Date(),
 ): WorkspaceState => {
   const freshState = refreshDailyState(state, now);
-  if (freshState.completedTaskIds.includes(task.id) || freshState.pendingTaskReviews.some((review) => review.taskId === task.id)) return freshState;
+  const round = result.contentRound ?? freshState.contentRound;
+  if (freshState.completedTaskIds.includes(task.id) || freshState.taskResults.some((item) => item.taskId === task.id && item.dateKey === freshState.dateKey && (item.contentRound ?? 0) === round) || freshState.pendingTaskReviews.some((review) => review.taskId === task.id && (review.contentRound ?? 0) === round)) return freshState;
 
   return {
     ...freshState,
     pendingTaskReviews: [...freshState.pendingTaskReviews, {
-      id: `${freshState.dateKey}-${task.id}`,
+      id: `${freshState.dateKey}-${round}-${task.id}`,
       taskId: task.id,
       taskTitle: task.title,
       points: task.points,
       dateKey: freshState.dateKey,
+      contentRound: round,
       result,
       submittedAt: now.toISOString(),
     }],
@@ -573,6 +604,8 @@ export const normalizeWorkspaceState = (parsed: Partial<WorkspaceState>, today: 
   const initial = initialWorkspaceState(today);
   return refreshDailyState({
     dateKey: parsed.dateKey ?? initial.dateKey,
+    contentDateKey: parsed.contentDateKey ?? parsed.dateKey ?? initial.contentDateKey,
+    contentRound: parsed.contentRound ?? 0,
     points: parsed.points ?? 0,
     pet: normalizePetState(parsed.pet, today),
     completedTaskIds: parsed.completedTaskIds ?? [],
@@ -584,6 +617,7 @@ export const normalizeWorkspaceState = (parsed: Partial<WorkspaceState>, today: 
     dailyEarnedPoints: parsed.dailyEarnedPoints ?? {},
     rewardRequests: parsed.rewardRequests ?? [],
     notifiedDailyReadyDates: parsed.notifiedDailyReadyDates ?? [],
+    masteredQuestionKeys: parsed.masteredQuestionKeys ?? [],
   }, today);
 };
 
