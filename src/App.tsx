@@ -902,7 +902,9 @@ function legacySpeak(text: string, lang = "zh-CN") {
 
 function MorningReading({ dateKey }: { dateKey: string }) {
   const content = getWeeklyContent(dateFromKey(dateKey));
-  const poem = chineseReadings[(dateFromKey(dateKey).getDate() - 1) % chineseReadings.length];
+  const readingDate = dateFromKey(dateKey);
+  const dayNumber = Math.floor(Date.UTC(readingDate.getFullYear(), readingDate.getMonth(), readingDate.getDate()) / 86400000);
+  const poem = chineseReadings[dayNumber % chineseReadings.length];
   return (
     <div className="panel-list">
       <div className="content-grid">

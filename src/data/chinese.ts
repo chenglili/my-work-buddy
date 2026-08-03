@@ -26,6 +26,26 @@ export const chineseReadings = [
     focus: ["依", "尽", "欲穷"],
     rewardStars: 5,
   },
+  {
+    id: "reading-xiao-chi",
+    title: "小池",
+    author: "宋·杨万里",
+    sourceNote: "公版古诗",
+    lines: ["泉眼无声惜细流，", "树阴照水爱晴柔。", "小荷才露尖尖角，", "早有蜻蜓立上头。"],
+    readingTip: "前两句读得轻柔，后两句读出小荷和蜻蜓的可爱。",
+    focus: ["惜", "晴柔", "才露"],
+    rewardStars: 5,
+  },
+  {
+    id: "reading-minong",
+    title: "悯农",
+    author: "唐·李绅",
+    sourceNote: "公版古诗",
+    lines: ["锄禾日当午，", "汗滴禾下土。", "谁知盘中餐，", "粒粒皆辛苦。"],
+    readingTip: "读出农民劳动的辛苦，最后两句要有提醒和珍惜的感觉。",
+    focus: ["锄禾", "汗滴", "辛苦"],
+    rewardStars: 5,
+  },
 ] satisfies ChineseReadingItem[];
 
 export const chinesePrepLessons = [
