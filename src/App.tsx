@@ -670,6 +670,7 @@ function SectionPage({ view, completedIds, pendingIds, syncPendingIds, requiredT
         <div><p className="eyebrow">{curriculumNote}</p><h2>{meta.label}</h2></div>
       </div>
       {view === "chinese" || view === "math" || view === "english" ? <SubjectDashboard view={view} dateKey={contentDateKey} tasks={tasks} completedIds={completedIds} /> : null}
+      {view === "english" ? <EnglishLessonCards lesson={getWeeklyContent(dateFromKey(contentDateKey)).english} /> : null}
       <TaskGrid tasks={tasks} completedIds={completedIds} pendingIds={pendingIds} syncPendingIds={syncPendingIds} requiredTaskIds={requiredTaskIds} onOpenTask={onOpenTask} />
     </section>
   );
@@ -847,6 +848,15 @@ function speak(text: string, lang = "zh-CN") {
   utterance.pitch = lang.toLowerCase().startsWith("zh") ? (selection.isFemale ? 1.12 : 1.22) : 1.03;
   utterance.volume = 1;
   synthesis.speak(utterance);
+}
+
+function EnglishLessonCards({ lesson }: { lesson: ReturnType<typeof getWeeklyContent>["english"] }) {
+  return <div className="english-content-cards">
+    <article className="english-content-card"><p className="eyebrow">核心单词</p><h3>{lesson.topic}</h3><div className="english-card-list">{lesson.words.map((item) => <div key={item.word}><strong>{item.word}</strong><span>{item.meaning}</span><button className="top-icon-button" title={`播放${item.word}`} aria-label={`播放${item.word}`} onClick={() => speak(item.word, "en-GB")}><Play size={15} /></button></div>)}</div></article>
+    <article className="english-content-card"><p className="eyebrow">核心句型</p><h3>听懂并开口说</h3><div className="english-card-list">{lesson.patterns.map((pattern) => <div key={pattern.sentence}><strong>{pattern.sentence}</strong><span>{pattern.meaning}</span><button className="top-icon-button" title="播放句型" aria-label="播放句型" onClick={() => speak(pattern.sentence, "en-GB")}><Play size={15} /></button></div>)}</div></article>
+    <article className="english-content-card"><p className="eyebrow">节奏跟读</p><h3>拍手跟读三遍</h3><p>{lesson.chant}</p><button className="secondary" onClick={() => speak(lesson.chant, "en-GB")}><Play size={16} />播放节奏句</button></article>
+    <article className="english-content-card"><p className="eyebrow">今日任务</p><h3>听、读、说都练一遍</h3><ol className="practice-steps">{lesson.tasks.map((task) => <li key={task}>{task}</li>)}</ol></article>
+  </div>;
 }
 
 function legacySpeak(text: string, lang = "zh-CN") {
@@ -1143,42 +1153,10 @@ function EnglishDaily({ dateKey }: { dateKey: string }) {
         <h3>{lesson.unit} · {lesson.title}</h3>
         <p>本周主题：{lesson.topic} · 6个单词 · 3个核心句型</p>
       </article>
-      <article className="panel">
-        <h3>核心单词与例句</h3>
-        {lesson.words.map((item) => (
-          <div className="english-line" key={item.word}>
-            <div><strong>{item.word}</strong><span>{item.meaning}</span><p>{item.sentence}</p></div>
-            <div className="inline-actions">
-              <button className="secondary" onClick={() => speak(item.word, "en-GB")}><Play size={16} />单词</button>
-              <button className="secondary" onClick={() => speak(item.sentence, "en-GB")}><Play size={16} />例句</button>
-            </div>
-          </div>
-        ))}
-      </article>
       <EnglishWordReview lesson={lesson} />
       <EnglishListeningGame lesson={lesson} dateKey={dateKey} />
-      <article className="panel">
-        <h3>核心句型</h3>
-        <div className="english-patterns">
-          {lesson.patterns.map((pattern) => (
-            <div key={pattern.sentence}>
-              <p><strong>{pattern.sentence}</strong></p>
-              <p>{pattern.meaning}</p>
-              <button className="secondary" onClick={() => speak(pattern.sentence, "en-GB")}><Play size={16} />听句型</button>
-            </div>
-          ))}
-        </div>
-      </article>
       <EnglishMeaningQuiz lesson={lesson} dateKey={dateKey} />
-      <article className="panel english-chant">
-        <div><p className="eyebrow">玉桂狗节奏秀</p><h3>拍手跟读三遍</h3><p>{lesson.chant}</p></div>
-        <button className="secondary" onClick={() => speak(lesson.chant, "en-GB")}><Play size={16} />播放节奏句</button>
-      </article>
       <EnglishSentenceTrain key={`${lesson.unit}-${dateKey}`} lesson={lesson} dateKey={dateKey} />
-      <article className="panel">
-        <h3>今日跟读任务</h3>
-        <ol className="practice-steps">{lesson.tasks.map((task) => <li key={task}>{task}</li>)}</ol>
-      </article>
     </div>
   );
 }
