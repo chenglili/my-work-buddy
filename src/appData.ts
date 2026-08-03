@@ -135,12 +135,12 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
   {
     id: "game-hanzi",
     category: "game",
-    title: "汉字闯关",
-    shortTitle: "汉字闯关",
+    title: "偏旁组字",
+    shortTitle: "偏旁组字",
     points: 3,
     minutes: "5分钟",
     character: "my-melody",
-    summary: "把词语分到人物、地点、动作三类。",
+    summary: "观察两个部件，拼出正确汉字，再读一读它组成的词语。",
   },
   {
     id: "game-number",
@@ -792,6 +792,13 @@ export interface ClassifyGameChallenge extends GameChallengeBase {
   baskets: string[];
 }
 
+export interface CharacterComposeGameChallenge extends GameChallengeBase {
+  kind: "compose";
+  parts: [string, string];
+  word: string;
+  options: string[];
+}
+
 export interface SudokuGameChallenge extends GameChallengeBase {
   kind: "sudoku";
   grid: number[];
@@ -810,7 +817,7 @@ export interface PatternGameChallenge extends GameChallengeBase {
   options: string[];
 }
 
-export type GameChallenge = ClassifyGameChallenge | SudokuGameChallenge | SpotGameChallenge | PatternGameChallenge;
+export type GameChallenge = ClassifyGameChallenge | CharacterComposeGameChallenge | SudokuGameChallenge | SpotGameChallenge | PatternGameChallenge;
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
@@ -823,6 +830,20 @@ const hanziItems = [
   ["鼓掌", "动作"], ["排队", "动作"], ["起床", "动作"],
 ] as const;
 
+const hanziComposeItems = [
+  ["日", "月", "明", "明亮", ["朋", "晴"]], ["木", "寸", "村", "村庄", ["材", "林"]], ["女", "子", "好", "好人", ["妈", "她"]], ["人", "木", "休", "休息", ["体", "从"]],
+  ["日", "十", "早", "早上", ["旦", "旱"]], ["口", "玉", "国", "国家", ["园", "因"]], ["日", "青", "晴", "晴天", ["睛", "清"]], ["三", "人", "春", "春天", ["奏", "众"]],
+  ["门", "口", "问", "问题", ["间", "闪"]], ["日", "免", "晚", "晚上", ["兔", "挽"]], ["雨", "田", "雷", "雷雨", ["雪", "电"]], ["小", "大", "尖", "尖头", ["尘", "少"]],
+  ["不", "正", "歪", "歪斜", ["还", "杯"]], ["口", "玉", "国", "祖国", ["园", "回"]], ["禾", "日", "香", "香味", ["和", "秀"]], ["火", "丁", "灯", "灯光", ["打", "订"]],
+  ["木", "寸", "村", "农村", ["材", "过"]], ["日", "月", "明", "明白", ["朋", "晴"]], ["女", "马", "妈", "妈妈", ["吗", "码"]], ["口", "鸟", "鸣", "鸟鸣", ["唱", "岛"]],
+  ["田", "力", "男", "男孩", ["加", "边"]], ["日", "寸", "时", "时间", ["寺", "过"]], ["人", "尔", "你", "你好", ["他", "您"]], ["木", "子", "李", "李子", ["季", "杏"]],
+  ["禾", "火", "秋", "秋天", ["伙", "秒"]], ["山", "夕", "岁", "岁月", ["多", "岚"]], ["日", "生", "星", "星星", ["醒", "姓"]], ["口", "天", "吴", "东吴", ["吞", "呆"]],
+  ["水", "少", "沙", "沙子", ["炒", "秒"]], ["女", "也", "她", "她们", ["他", "地"]], ["日", "木", "果", "水果", ["课", "呆"]], ["目", "青", "睛", "眼睛", ["晴", "清"]],
+  ["言", "午", "许", "许多", ["什", "于"]], ["心", "白", "怕", "害怕", ["拍", "泊"]], ["手", "包", "抱", "拥抱", ["跑", "泡"]], ["足", "包", "跑", "跑步", ["抱", "泡"]],
+  ["三", "人", "春", "春风", ["奏", "众"]], ["日", "月", "明", "明天", ["朋", "晴"]], ["木", "几", "机", "飞机", ["朵", "肌"]], ["口", "未", "味", "味道", ["妹", "昧"]],
+  ["土", "也", "地", "土地", ["池", "她"]], ["氵", "青", "清", "清水", ["晴", "情"]], ["日", "寸", "时", "小时", ["寺", "过"]], ["禾", "中", "种", "种子", ["钟", "冲"]],
+] as const;
+
 const names = ["小雨", "乐乐", "安安", "甜甜", "朵朵", "晨晨", "果果", "米米", "可可", "宁宁"];
 const spotPairs = [
   ["🌸", "🌼"], ["⭐", "🌟"], ["🍎", "🍅"], ["🐰", "🐱"], ["🎈", "🍭"],
@@ -830,7 +851,7 @@ const spotPairs = [
 ] as const;
 
 export const gameQuestionBanks: Record<string, GameChallenge[]> = {
-  "game-hanzi": hanziItems.map(([word, answer]) => ({ kind: "classify", question: `把“${word}”放进正确的篮子`, item: word, baskets: ["人物", "地点", "动作"], answer })),
+  "game-hanzi": hanziComposeItems.slice(0, 40).map(([first, second, answer, word, distractors], index) => ({ kind: "compose", question: `偏旁组字第${index + 1}关：${word}，请把两个部件拼成正确的字`, parts: [first, second], word, options: [answer, ...distractors], answer })),
   "game-number": Array.from({ length: 40 }, (_, index) => {
     const solution = Array.from({ length: 36 }, (_, cellIndex) => {
       const row = Math.floor(cellIndex / 6);

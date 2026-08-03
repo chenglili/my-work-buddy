@@ -510,7 +510,7 @@ describe("practice content safeguards", () => {
 
   it("provides 40 questions in every game bank with deterministic five-round sessions", () => {
     const expectedKinds = {
-      "game-hanzi": "classify",
+      "game-hanzi": "compose",
       "game-number": "sudoku",
       "game-spot": "spot",
       "game-logic": "pattern",
@@ -519,9 +519,11 @@ describe("practice content safeguards", () => {
       expect(bank.length).toBeGreaterThanOrEqual(40);
       expect(new Set(bank.map((challenge) => challenge.kind))).toEqual(new Set([expectedKinds[taskId as keyof typeof expectedKinds]]));
       for (const challenge of bank) {
-        if (challenge.kind === "classify") {
-          expect(challenge.item.length).toBeGreaterThan(0);
-          expect(challenge.baskets).toContain(challenge.answer);
+        if (challenge.kind === "compose") {
+          expect(challenge.parts).toHaveLength(2);
+          expect(challenge.word.length).toBeGreaterThan(1);
+          expect(challenge.options).toHaveLength(3);
+          expect(challenge.options).toContain(challenge.answer);
         } else if (challenge.kind === "sudoku") {
           expect(challenge.grid).toHaveLength(36);
           expect(challenge.solution).toHaveLength(36);
@@ -532,7 +534,7 @@ describe("practice content safeguards", () => {
           expect(challenge.tiles.length).toBeGreaterThanOrEqual(9);
           expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
           expect(Number(challenge.answer)).toBeLessThan(challenge.tiles.length);
-        } else {
+        } else if (challenge.kind === "pattern") {
           expect(challenge.sequence).toHaveLength(6);
           expect(challenge.sequence[4]).toBeNull();
           expect(challenge.options).toHaveLength(3);

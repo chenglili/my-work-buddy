@@ -687,6 +687,60 @@ button {
   font-weight: 800;
 }
 
+.compose-parts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.compose-parts span {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border: 2px solid #d98cac;
+  border-radius: 8px;
+  background: #fff4f8;
+  color: #7a3657;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.compose-parts b {
+  color: #9b4c16;
+  font-size: 24px;
+}
+
+.compose-parts .compose-missing {
+  border-style: dashed;
+  border-color: #efbd4f;
+  background: #fff8df;
+  color: #a06b0c;
+}
+
+.compose-word {
+  margin: 0;
+  color: #755818;
+  text-align: center;
+  font-weight: 800;
+}
+
+.compose-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.compose-options button {
+  min-height: 62px;
+  color: #31536b;
+  font-size: 30px;
+  font-weight: 900;
+}
+
 .order-track {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
