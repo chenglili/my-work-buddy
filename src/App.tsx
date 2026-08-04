@@ -763,13 +763,14 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
 }
 
 function TaskPage({ task, completed: completedFromState, existingResult, pending, syncPending, eligible, dateKey, contentDateKey, contentRound, masteredQuestionKeys, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; contentDateKey: string; contentRound: number; masteredQuestionKeys: string[]; onDone: (outcome: TaskOutcome) => void }) {
-  const completed = completedFromState && (task.category !== "game" || isGameDraftFinished(task.id, dateKey));
+  const gameFinished = task.category !== "game" || isGameDraftFinished(task.id, dateKey);
+  const completed = completedFromState && gameFinished;
   const directCompletion = allowsDirectCompletion(task);
   const initialOutcome = completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome;
   const outcomeKey = task.category === "game" ? `task:${task.id}:${dateKey}:${contentRound}:game-v2` : `task:${task.id}:${dateKey}:${contentRound}`;
   const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(outcomeKey, initialOutcome);
 
-  const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
+  const canComplete = outcome.ready && gameFinished && !completed && !pending && !syncPending && eligible;
 
   return (
     <section>
