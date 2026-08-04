@@ -555,8 +555,12 @@ describe("practice content safeguards", () => {
           expect(challenge.tiles.every((tile) => tile.product >= 1 && tile.product <= 81)).toBe(true);
           expect(challenge.tiles.filter((tile) => tile.kind === "expression")).toHaveLength(18);
           expect(challenge.tiles.filter((tile) => tile.kind === "answer")).toHaveLength(18);
-          expect(challenge.tiles.filter((tile) => tile.kind === "expression").every((tile) => /^[1-9] × [1-9]$/.test(tile.label))).toBe(true);
-          expect(challenge.tiles.filter((tile) => tile.kind === "answer").every((tile) => /^[1-9][0-9]?$/.test(tile.label))).toBe(true);
+          const expressions = challenge.tiles.filter((tile) => tile.kind === "expression");
+          const answers = challenge.tiles.filter((tile) => tile.kind === "answer");
+          expect(expressions.every((tile) => /^[1-9] × [1-9]$/.test(tile.label))).toBe(true);
+          expect(answers.every((tile) => /^[1-9][0-9]?$/.test(tile.label))).toBe(true);
+          expect(new Set(expressions.map((tile) => tile.label)).size).toBe(18);
+          expect(new Set(answers.map((tile) => tile.product)).size).toBe(18);
           for (const expression of challenge.tiles.filter((tile) => tile.kind === "expression")) {
             expect(challenge.tiles.some((tile) => tile.kind === "answer" && tile.product === expression.product)).toBe(true);
           }

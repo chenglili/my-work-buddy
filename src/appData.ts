@@ -850,6 +850,12 @@ const spotPairs = [
   ["🍓", "🍒"], ["☀️", "🌙"], ["🎀", "🎁"], ["🐶", "🐻"], ["🌈", "☁️"],
 ] as const;
 
+const multiplicationFacts = Array.from({ length: 81 }, (_, factIndex) => {
+  const left = Math.floor(factIndex / 9) + 1;
+  const right = (factIndex % 9) + 1;
+  return { left, right, product: left * right };
+});
+
 export const gameQuestionBanks: Record<string, GameChallenge[]> = {
   "game-hanzi": hanziComposeItems.slice(0, 40).map(([first, second, answer, word, distractors], index) => ({ kind: "compose", question: `偏旁组字第${index + 1}关：${word}，请把两个部件拼成正确的字`, parts: [first, second], word, options: [answer, ...distractors], answer })),
   "game-number": Array.from({ length: 40 }, (_, index) => {
@@ -864,15 +870,18 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "sudoku", question: `6×6数独第${index + 1}关：每行、每列和每个小宫都填入1到6`, grid, solution, options: [1, 2, 3, 4, 5, 6], answer: solution.join(",") };
   }),
   "game-spot": Array.from({ length: 40 }, (_, index) => {
-    const pairs = Array.from({ length: 18 }, (_, pairIndex) => {
-      const left = ((index * 5 + pairIndex * 2) % 9) + 1;
-      const right = ((index * 7 + pairIndex * 4) % 9) + 1;
-      const product = left * right;
-      return [
-        { kind: "expression" as const, label: `${left} × ${right}`, product },
-        { kind: "answer" as const, label: String(product), product },
-      ];
-    });
+    const usedProducts = new Set<number>();
+    const selectedFacts = Array.from({ length: multiplicationFacts.length }, (_, offset) => multiplicationFacts[(offset * 17 + index * 13) % multiplicationFacts.length])
+      .filter((fact) => {
+        if (usedProducts.has(fact.product)) return false;
+        usedProducts.add(fact.product);
+        return true;
+      })
+      .slice(0, 18);
+    const pairs = selectedFacts.map(({ left, right, product }) => [
+      { kind: "expression" as const, label: `${left} × ${right}`, product },
+      { kind: "answer" as const, label: String(product), product },
+    ]);
     const rawTiles = pairs.flat();
     const tiles = Array.from({ length: rawTiles.length }, (_, tileIndex) => rawTiles[(tileIndex * 11 + index * 7) % rawTiles.length]);
     return {
