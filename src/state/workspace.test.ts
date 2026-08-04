@@ -553,10 +553,12 @@ describe("practice content safeguards", () => {
         } else if (challenge.kind === "multiplication-match") {
           expect(challenge.tiles).toHaveLength(36);
           expect(challenge.tiles.every((tile) => tile.product >= 1 && tile.product <= 81)).toBe(true);
-          for (let index = 0; index < challenge.tiles.length; index += 2) {
-            expect(challenge.tiles[index].product).toBe(challenge.tiles[index + 1].product);
-            expect(challenge.tiles[index].expression).toMatch(/^[1-9] × [1-9]$/);
-            expect(challenge.tiles[index + 1].expression).toMatch(/^[1-9] × [1-9]$/);
+          expect(challenge.tiles.filter((tile) => tile.kind === "expression")).toHaveLength(18);
+          expect(challenge.tiles.filter((tile) => tile.kind === "answer")).toHaveLength(18);
+          expect(challenge.tiles.filter((tile) => tile.kind === "expression").every((tile) => /^[1-9] × [1-9]$/.test(tile.label))).toBe(true);
+          expect(challenge.tiles.filter((tile) => tile.kind === "answer").every((tile) => /^[1-9][0-9]?$/.test(tile.label))).toBe(true);
+          for (const expression of challenge.tiles.filter((tile) => tile.kind === "expression")) {
+            expect(challenge.tiles.some((tile) => tile.kind === "answer" && tile.product === expression.product)).toBe(true);
           }
         } else if (challenge.kind === "pattern") {
           expect(challenge.sequence).toHaveLength(6);
@@ -585,14 +587,18 @@ describe("practice content safeguards", () => {
     for (const game of games) expect(game.minimumScore).toBe(0);
   });
 
-  it("only matches adjacent multiplication tiles with the same product", () => {
-    const tiles = [{ product: 12 }, { product: 12 }, { product: 12 }, { product: 15 }, { product: 12 }, { product: 12 }];
+  it("matches an expression with its answer tile regardless of position", () => {
+    const tiles = [
+      { kind: "expression" as const, product: 12 },
+      { kind: "answer" as const, product: 15 },
+      { kind: "answer" as const, product: 12 },
+      { kind: "expression" as const, product: 15 },
+    ];
 
-    expect(isMultiplicationMatch(0, 1, tiles)).toBe(true);
-    expect(isMultiplicationMatch(1, 2, tiles)).toBe(true);
-    expect(isMultiplicationMatch(0, 2, tiles)).toBe(false);
-    expect(isMultiplicationMatch(2, 3, tiles)).toBe(false);
-    expect(isMultiplicationMatch(0, 6, tiles)).toBe(false);
+    expect(isMultiplicationMatch(0, 2, tiles)).toBe(true);
+    expect(isMultiplicationMatch(3, 1, tiles)).toBe(true);
+    expect(isMultiplicationMatch(0, 1, tiles)).toBe(false);
+    expect(isMultiplicationMatch(2, 0, tiles)).toBe(false);
   });
 
   it("provides 40 age-appropriate integer word problems", () => {

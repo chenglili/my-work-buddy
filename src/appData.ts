@@ -808,7 +808,7 @@ export interface SudokuGameChallenge extends GameChallengeBase {
 
 export interface MultiplicationMatchGameChallenge extends GameChallengeBase {
   kind: "multiplication-match";
-  tiles: Array<{ expression: string; product: number }>;
+  tiles: Array<{ kind: "expression" | "answer"; label: string; product: number }>;
 }
 
 export interface PatternGameChallenge extends GameChallengeBase {
@@ -867,16 +867,17 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     const pairs = Array.from({ length: 18 }, (_, pairIndex) => {
       const left = ((index * 5 + pairIndex * 2) % 9) + 1;
       const right = ((index * 7 + pairIndex * 4) % 9) + 1;
-      const expression = `${left} × ${right}`;
-      const reverseExpression = `${right} × ${left}`;
-      return pairIndex % 2 === 0
-        ? [{ expression, product: left * right }, { expression: reverseExpression, product: left * right }]
-        : [{ expression: reverseExpression, product: left * right }, { expression, product: left * right }];
+      const product = left * right;
+      return [
+        { kind: "expression" as const, label: `${left} × ${right}`, product },
+        { kind: "answer" as const, label: String(product), product },
+      ];
     });
-    const tiles = pairs.flat();
+    const rawTiles = pairs.flat();
+    const tiles = Array.from({ length: rawTiles.length }, (_, tileIndex) => rawTiles[(tileIndex * 11 + index * 7) % rawTiles.length]);
     return {
       kind: "multiplication-match",
-      question: `第${index + 1}关：配对相邻且积相同的乘法算式`,
+      question: `第${index + 1}关：先点算式，再点对应的答案数字`,
       tiles,
       answer: tiles.map((tile) => tile.product).join(","),
     };

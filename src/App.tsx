@@ -1490,13 +1490,8 @@ function GameRound({ challenge, draftKey, selected, correct, onBegin, onSubmit }
   return null;
 }
 
-export const isMultiplicationMatch = (first: number, second: number, tiles: Array<{ product: number }>) => {
-  const firstRow = Math.floor(first / 6);
-  const secondRow = Math.floor(second / 6);
-  const firstColumn = first % 6;
-  const secondColumn = second % 6;
-  return Math.abs(firstRow - secondRow) + Math.abs(firstColumn - secondColumn) === 1 && tiles[first]?.product === tiles[second]?.product;
-};
+export const isMultiplicationMatch = (first: number, second: number, tiles: Array<{ kind: "expression" | "answer"; product: number }>) =>
+  tiles[first]?.kind === "expression" && tiles[second]?.kind === "answer" && tiles[first]?.product === tiles[second]?.product;
 
 function MultiplicationMatchGame({ challenge, draftKey, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "multiplication-match" }>; draftKey: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
   const [cleared, setCleared] = usePracticeDraft<number[]>(`${draftKey}:cleared`, []);
@@ -1506,6 +1501,10 @@ function MultiplicationMatchGame({ challenge, draftKey, correct, onBegin, onSubm
   const selectCell = (index: number) => {
     if (correct || clearedSet.has(index)) return;
     if (activeCell === null) {
+      if (challenge.tiles[index].kind !== "expression") {
+        onSubmit("__wrong__");
+        return;
+      }
       onBegin();
       setActiveCell(index);
       return;
@@ -1516,7 +1515,7 @@ function MultiplicationMatchGame({ challenge, draftKey, correct, onBegin, onSubm
     }
     const isMatch = isMultiplicationMatch(activeCell, index, challenge.tiles);
     if (!isMatch) {
-      setActiveCell(index);
+      setActiveCell(null);
       onSubmit("__wrong__");
       return;
     }
@@ -1527,7 +1526,7 @@ function MultiplicationMatchGame({ challenge, draftKey, correct, onBegin, onSubm
     if (nextCleared.length === challenge.tiles.length) onSubmit(challenge.answer);
   };
 
-  return <div className="game-interaction multiplication-match-game"><p>{challenge.question}</p><div className="multiplication-board" role="grid" aria-label="九九乘法表消消乐六乘六棋盘">{challenge.tiles.map((tile, index) => <button className={`${clearedSet.has(index) ? "multiplication-cleared" : ""} ${activeCell === index ? "multiplication-active" : ""}`} disabled={correct || clearedSet.has(index)} key={index} aria-label={`${index + 1}号算式 ${tile.expression}，积为${tile.product}`} onClick={() => selectCell(index)}>{clearedSet.has(index) ? "✓" : tile.expression}</button>)}</div><p className="multiplication-hint">先点击一个算式，再点击相邻且积相同的算式。</p></div>;
+  return <div className="game-interaction multiplication-match-game"><p>{challenge.question}</p><div className="multiplication-board" role="grid" aria-label="九九乘法表消消乐六乘六棋盘">{challenge.tiles.map((tile, index) => <button className={`${clearedSet.has(index) ? "multiplication-cleared" : ""} ${activeCell === index ? "multiplication-active" : ""}`} disabled={correct || clearedSet.has(index)} key={index} aria-label={`${index + 1}号${tile.kind === "expression" ? "乘法算式" : "答案数字"} ${tile.label}`} onClick={() => selectCell(index)}>{clearedSet.has(index) ? "✓" : tile.label}</button>)}</div><p className="multiplication-hint">先点击一个乘法算式，再点击其他格中的对应答案数字。</p></div>;
 }
 
 function SudokuGame({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "sudoku" }>; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
