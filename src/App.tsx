@@ -207,10 +207,11 @@ function usePracticeDraft<T>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
-const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set([
-  ...state.completedTaskIds,
-  ...state.taskResults.filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound).map((result) => result.taskId),
-]));
+export const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set(
+  state.taskResults
+    .filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound)
+    .map((result) => result.taskId),
+));
 
 const formatDate = (value: string) => value.slice(5).replace("-", "/");
 
@@ -750,7 +751,7 @@ function TaskPage({ task, completed, existingResult, pending, syncPending, eligi
           ...outcome,
           durationSeconds: outcome.durationSeconds ?? 0,
         })}>
-          <CheckCircle2 size={20} />{completed ? "今天已完成" : syncPending ? "等待同步" : pending ? "等待家长审核" : !eligible ? "今日自由练习" : task.completionMode === "parent" ? "提交家长审核" : `完成任务 +${task.points}`}
+          <CheckCircle2 size={20} />{completed ? "今日已完成" : syncPending ? "等待同步" : pending ? "等待家长审核" : !eligible ? "今日自由练习" : task.completionMode === "parent" ? "提交家长审核" : `完成任务 +${task.points}`}
         </button>
       </div>
     </section>

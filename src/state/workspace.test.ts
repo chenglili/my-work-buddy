@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, getWeeklyContent, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
-import { allowsDirectCompletion, generateArithmetic, isMultiplicationMatch, petHotspotIsAvailable, petSceneHotspots } from "../App";
+import { allowsDirectCompletion, completedTaskIdsForToday, generateArithmetic, isMultiplicationMatch, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
   advanceContentRound,
@@ -591,6 +591,14 @@ describe("practice content safeguards", () => {
     for (const game of games) expect(game.minimumScore).toBe(0);
     expect(games.every((game) => !allowsDirectCompletion(game))).toBe(true);
     expect(allowsDirectCompletion(taskCatalog.find((task) => task.id === "chinese-morning-reading")!)).toBe(true);
+  });
+
+  it("keeps completed game cards independent when stale task ids contain other games", () => {
+    const today = day("2026-08-04");
+    const completed = completeTask(initialWorkspaceState(today), "game-spot", 3, [], {}, today);
+    const staleState = { ...completed, completedTaskIds: [...completed.completedTaskIds, "game-hanzi", "game-number"] };
+
+    expect(completedTaskIdsForToday(staleState)).toEqual(["game-spot"]);
   });
 
   it("matches an expression with its answer tile regardless of position", () => {
