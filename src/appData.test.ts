@@ -4,6 +4,11 @@ import { extendedReadingComprehensions } from "./data";
 
 const task = (id: string) => taskCatalog.find((item) => item.id === id);
 
+it("describes multiplication match as expression-to-answer pairing", () => {
+  expect(task("game-spot")?.summary).toContain("对应答案数字");
+  expect(task("game-spot")?.summary).not.toContain("相邻且积相同");
+});
+
 describe("reading completion rules", () => {
   it("allows subject reading tasks to be completed without a timer", () => {
     for (const id of ["chinese-morning-reading", "chinese-night-reading", "english-daily"]) {

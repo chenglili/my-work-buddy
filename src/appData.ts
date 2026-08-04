@@ -160,7 +160,7 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
     points: 3,
     minutes: "5分钟",
     character: "hello-kitty",
-    summary: "点击相邻且积相同的乘法算式配对消除，练习完整九九乘法表。",
+    summary: "先点击乘法算式，再点击其他格中的对应答案数字配对消除，练习完整九九乘法表。",
   },
   {
     id: "game-logic",
