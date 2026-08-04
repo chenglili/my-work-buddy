@@ -28,6 +28,7 @@ import {
   rejectReward,
   rejectTaskReview,
   requestReward,
+  resetTodayGameCompletions,
   submitTaskReview,
 } from "./workspace";
 
@@ -598,6 +599,18 @@ describe("practice content safeguards", () => {
     const state = { ...initialWorkspaceState(today), completedTaskIds: ["game-spot"] };
 
     expect(completedTaskIdsForToday(state)).toEqual(["game-spot"]);
+  });
+
+  it("rolls back today's game records and task points without touching other tasks", () => {
+    const today = day("2026-08-04");
+    const withGame = completeTask(initialWorkspaceState(today), "game-spot", 3, [], {}, today);
+    const withOtherTask = completeTask(withGame, "math-arithmetic", 5, [], {}, today);
+    const reset = resetTodayGameCompletions(withOtherTask, today);
+
+    expect(reset.points).toBe(20);
+    expect(reset.completedTaskIds).toEqual(["math-arithmetic"]);
+    expect(reset.taskResults.map((result) => result.taskId)).toEqual(["math-arithmetic"]);
+    expect(reset.pointRecords.filter((record) => record.reason === "task").map((record) => record.sourceId)).toEqual(["math-arithmetic"]);
   });
 
   it("matches an expression with its answer tile regardless of position", () => {

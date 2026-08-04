@@ -74,6 +74,7 @@ import {
   readStoredState,
   rejectTaskReview,
   rejectReward,
+  resetTodayGameCompletions,
   requestReward,
   STORAGE_KEY,
   submitTaskReview,
@@ -146,6 +147,8 @@ interface TaskOutcome extends CompletionResultInput {
 
 const emptyOutcome: TaskOutcome = { ready: false, durationSeconds: 0, attempts: 1, wrongQuestions: [] };
 const sectionKeys: ViewKey[] = ["home", "chinese", "math", "english", "game", "science", "sport", "shop", "pet"];
+const GAME_ROLLBACK_DATE_KEY = "2026-08-04";
+const GAME_ROLLBACK_MARKER = "my-work-buddy:rollback-games:2026-08-04";
 const encouragements = [
   "认真完成一小步，今天就更稳一点。",
   "慢慢读、认真写，好习惯会留下来。",
@@ -254,6 +257,7 @@ export default function App() {
   const [contentDateKey, setContentDateKey] = useState(() => readContentDateKey(dateKey()));
   const notificationAttemptedDate = useRef<string | null>(null);
   const previousCloudBonus = useRef<boolean | null>(null);
+  const gameRollbackAttempted = useRef(false);
 
   useEffect(() => {
     if (workspace.enabled && workspace.mode !== "ready") return;
@@ -309,6 +313,31 @@ export default function App() {
     if (!previousCloudBonus.current && state.bonusAwarded) setShowVictory(true);
     previousCloudBonus.current = state.bonusAwarded;
   }, [state.bonusAwarded, workspace.enabled, workspace.mode]);
+
+  useEffect(() => {
+    if (gameRollbackAttempted.current || state.dateKey !== GAME_ROLLBACK_DATE_KEY) return;
+    try {
+      if (window.localStorage.getItem(GAME_ROLLBACK_MARKER)) return;
+    } catch {
+      // Continue with the in-memory rollback when local storage is unavailable.
+    }
+    if (workspace.enabled && workspace.mode !== "ready") return;
+
+    gameRollbackAttempted.current = true;
+    const rollbackDate = new Date(`${GAME_ROLLBACK_DATE_KEY}T12:00:00`);
+    setState((current) => resetTodayGameCompletions(current, rollbackDate));
+    const markComplete = () => {
+      try { window.localStorage.setItem(GAME_ROLLBACK_MARKER, "done"); } catch { /* best effort */ }
+    };
+    if (!workspace.enabled) {
+      markComplete();
+      return;
+    }
+    void workspace.resetTodayGameCompletions().then(markComplete).catch(() => {
+      gameRollbackAttempted.current = false;
+      setToast("游戏历史状态正在等待云端回滚，请稍后刷新页面。 ");
+    });
+  }, [setState, state.dateKey, workspace.enabled, workspace.mode, workspace.resetTodayGameCompletions]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });

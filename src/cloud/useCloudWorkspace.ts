@@ -567,6 +567,7 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     refresh,
     refreshLocalDate,
     startContentRound,
+    resetTodayGameCompletions: () => runMutation("reset_today_game_completions", {}),
     confirmLegacyImport,
     submitTask,
     reviewTask: (reviewId, action) => runMutation("review_task", { p_review_id: reviewId, p_action: action }),

@@ -60,6 +60,7 @@ export interface CloudWorkspaceController {
   refresh(): Promise<void>;
   refreshLocalDate(): void;
   startContentRound(contentDateKey: string): Promise<void>;
+  resetTodayGameCompletions(): Promise<void>;
   confirmLegacyImport(): Promise<void>;
   submitTask(task: TaskDefinition, result: CompletionResultInput): Promise<"synced" | "queued">;
   reviewTask(reviewId: string, action: "approve" | "reject"): Promise<void>;

@@ -106,6 +106,8 @@ export interface WorkspaceState {
   masteredQuestionKeys: string[];
 }
 
+export const gameTaskIds = ['game-hanzi', 'game-number', 'game-spot', 'game-logic'] as const;
+
 interface LegacyWorkspaceState {
   dateKey?: string;
   points?: number;
@@ -223,6 +225,34 @@ export const refreshDailyState = (state: WorkspaceState, today = new Date()): Wo
     completedTaskIds: [],
     bonusAwarded: false,
     pendingTaskReviews: [],
+  };
+};
+
+export const resetTodayGameCompletions = (state: WorkspaceState, today = new Date()): WorkspaceState => {
+  const freshState = refreshDailyState(state, today);
+  const todayKey = dateKey(today);
+  const round = freshState.contentRound;
+  const gameIds = new Set<string>(gameTaskIds);
+  const isTodayGameResult = (result: TaskResult) => result.dateKey === todayKey && (result.contentRound ?? 0) === round && gameIds.has(result.taskId);
+  const isTodayGamePoint = (record: PointRecord) => record.dateKey === todayKey && record.reason === 'task' && gameIds.has(record.sourceId ?? '');
+  const removedPoints = freshState.pointRecords.filter(isTodayGamePoint).reduce((sum, record) => sum + record.delta, 0);
+  const currentWeek = weekKey(today);
+
+  return {
+    ...freshState,
+    points: Math.max(0, freshState.points - removedPoints),
+    completedTaskIds: freshState.completedTaskIds.filter((taskId) => !gameIds.has(taskId)),
+    taskResults: freshState.taskResults.filter((result) => !isTodayGameResult(result)),
+    pendingTaskReviews: freshState.pendingTaskReviews.filter((review) => !(review.dateKey === todayKey && (review.contentRound ?? 0) === round && gameIds.has(review.taskId))),
+    pointRecords: freshState.pointRecords.filter((record) => !isTodayGamePoint(record)),
+    dailyEarnedPoints: {
+      ...freshState.dailyEarnedPoints,
+      [todayKey]: Math.max(0, (freshState.dailyEarnedPoints[todayKey] ?? 0) - removedPoints),
+    },
+    weeklyPoints: {
+      ...freshState.weeklyPoints,
+      [currentWeek]: Math.max(0, (freshState.weeklyPoints[currentWeek] ?? 0) - removedPoints),
+    },
   };
 };
 
