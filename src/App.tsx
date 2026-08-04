@@ -1515,7 +1515,7 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
         </div>
       ) : (
         <>
-          <GameRound key={challenge.question} challenge={challenge} draftKey={`game-sudoku:${taskId}:${dateKey}:${challenge.question}`} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
+          <GameRound key={challenge.question} challenge={challenge} draftKey={`game-match-v2:${taskId}:${dateKey}:${challenge.question}`} selected={selected} correct={roundCorrect} onBegin={() => setSelected("")} onSubmit={choose} />
           {selected ? <p className={roundCorrect ? "answer game-feedback" : "gentle-retry game-feedback"}>{roundCorrect ? (roundMissed ? "找到了！认真改正也很棒。" : "一次答对，收下一颗连胜星！") : "再试一次：看看画面里的线索。"}</p> : <p className="muted game-feedback">按画面提示完成这一关。</p>}
           {roundCorrect && roundIndex < challenges.length - 1 ? <button className="primary game-next" onClick={nextRound}>下一关 <ArrowLeft className="next-arrow" size={18} /></button> : null}
         </>
