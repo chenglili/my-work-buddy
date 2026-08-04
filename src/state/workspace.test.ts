@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, getWeeklyContent, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
-import { generateArithmetic, isMultiplicationMatch, petHotspotIsAvailable, petSceneHotspots } from "../App";
+import { allowsDirectCompletion, generateArithmetic, isMultiplicationMatch, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
   advanceContentRound,
@@ -589,6 +589,8 @@ describe("practice content safeguards", () => {
     const games = taskCatalog.filter((task) => task.category === "game");
     expect(games).toHaveLength(4);
     for (const game of games) expect(game.minimumScore).toBe(0);
+    expect(games.every((game) => !allowsDirectCompletion(game))).toBe(true);
+    expect(allowsDirectCompletion(taskCatalog.find((task) => task.id === "chinese-morning-reading")!)).toBe(true);
   });
 
   it("matches an expression with its answer tile regardless of position", () => {

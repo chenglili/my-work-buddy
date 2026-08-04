@@ -726,9 +726,10 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
 }
 
 function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, contentDateKey, contentRound, masteredQuestionKeys, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; contentDateKey: string; contentRound: number; masteredQuestionKeys: string[]; onDone: (outcome: TaskOutcome) => void }) {
-  const directCompletion = task.completionMode === "auto" && task.minimumScore === 0;
+  const directCompletion = allowsDirectCompletion(task);
   const initialOutcome = completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome;
-  const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(`task:${task.id}:${dateKey}:${contentRound}`, initialOutcome);
+  const outcomeKey = task.category === "game" ? `task:${task.id}:${dateKey}:${contentRound}:game-v2` : `task:${task.id}:${dateKey}:${contentRound}`;
+  const [outcome, setOutcome] = usePracticeDraft<TaskOutcome>(outcomeKey, initialOutcome);
 
   const canComplete = outcome.ready && !completed && !pending && !syncPending && eligible;
 
@@ -755,6 +756,8 @@ function TaskPage({ task, completed, existingResult, pending, syncPending, eligi
     </section>
   );
 }
+
+export const allowsDirectCompletion = (task: Pick<TaskDefinition, "category" | "completionMode" | "minimumScore">) => task.category !== "game" && task.completionMode === "auto" && task.minimumScore === 0;
 
 function completionHint(task: TaskDefinition) {
   if (task.completionMode === "timer") return `有效练习达到${Math.round((task.minimumDuration ?? 0) / 60)}分钟后自动完成并发放积分。`;
