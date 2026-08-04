@@ -62,6 +62,7 @@ import {
   dailyParentPin,
   dateKey,
   fulfillReward,
+  gameTaskIds,
   getDailyReport,
   getMonthlyReport,
   getWeeklyReport,
@@ -210,12 +211,17 @@ function usePracticeDraft<T>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
+const isGameDraftFinished = (taskId: string, todayKey: string) => {
+  if (typeof window === "undefined") return true;
+  return readPracticeDraft<boolean>(`game:${taskId}:${todayKey}:finished`) === true;
+};
+
 export const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set(
   [
     ...state.completedTaskIds,
     ...state.taskResults.filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound).map((result) => result.taskId),
   ],
-));
+)).filter((taskId) => !gameTaskIds.includes(taskId as typeof gameTaskIds[number]) || isGameDraftFinished(taskId, state.dateKey));
 
 const formatDate = (value: string) => value.slice(5).replace("-", "/");
 
@@ -756,7 +762,8 @@ function TaskGrid({ tasks, completedIds, pendingIds, syncPendingIds, requiredTas
   );
 }
 
-function TaskPage({ task, completed, existingResult, pending, syncPending, eligible, dateKey, contentDateKey, contentRound, masteredQuestionKeys, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; contentDateKey: string; contentRound: number; masteredQuestionKeys: string[]; onDone: (outcome: TaskOutcome) => void }) {
+function TaskPage({ task, completed: completedFromState, existingResult, pending, syncPending, eligible, dateKey, contentDateKey, contentRound, masteredQuestionKeys, onDone }: { task: TaskDefinition; completed: boolean; existingResult?: TaskResult; pending: boolean; syncPending: boolean; eligible: boolean; dateKey: string; contentDateKey: string; contentRound: number; masteredQuestionKeys: string[]; onDone: (outcome: TaskOutcome) => void }) {
+  const completed = completedFromState && (task.category !== "game" || isGameDraftFinished(task.id, dateKey));
   const directCompletion = allowsDirectCompletion(task);
   const initialOutcome = completed || directCompletion ? { ...emptyOutcome, ready: true, evidence: directCompletion ? "孩子自主确认已完成任务" : undefined, message: directCompletion ? "完成后，可以直接点击完成任务。" : undefined } : emptyOutcome;
   const outcomeKey = task.category === "game" ? `task:${task.id}:${dateKey}:${contentRound}:game-v2` : `task:${task.id}:${dateKey}:${contentRound}`;

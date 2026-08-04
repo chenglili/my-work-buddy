@@ -231,9 +231,8 @@ export const refreshDailyState = (state: WorkspaceState, today = new Date()): Wo
 export const resetTodayGameCompletions = (state: WorkspaceState, today = new Date()): WorkspaceState => {
   const freshState = refreshDailyState(state, today);
   const todayKey = dateKey(today);
-  const round = freshState.contentRound;
   const gameIds = new Set<string>(gameTaskIds);
-  const isTodayGameResult = (result: TaskResult) => result.dateKey === todayKey && (result.contentRound ?? 0) === round && gameIds.has(result.taskId);
+  const isTodayGameResult = (result: TaskResult) => result.dateKey === todayKey && gameIds.has(result.taskId);
   const isTodayGamePoint = (record: PointRecord) => record.dateKey === todayKey && record.reason === 'task' && gameIds.has(record.sourceId ?? '');
   const removedPoints = freshState.pointRecords.filter(isTodayGamePoint).reduce((sum, record) => sum + record.delta, 0);
   const currentWeek = weekKey(today);
@@ -243,7 +242,7 @@ export const resetTodayGameCompletions = (state: WorkspaceState, today = new Dat
     points: Math.max(0, freshState.points - removedPoints),
     completedTaskIds: freshState.completedTaskIds.filter((taskId) => !gameIds.has(taskId)),
     taskResults: freshState.taskResults.filter((result) => !isTodayGameResult(result)),
-    pendingTaskReviews: freshState.pendingTaskReviews.filter((review) => !(review.dateKey === todayKey && (review.contentRound ?? 0) === round && gameIds.has(review.taskId))),
+    pendingTaskReviews: freshState.pendingTaskReviews.filter((review) => !(review.dateKey === todayKey && gameIds.has(review.taskId))),
     pointRecords: freshState.pointRecords.filter((record) => !isTodayGamePoint(record)),
     dailyEarnedPoints: {
       ...freshState.dailyEarnedPoints,
