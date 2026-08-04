@@ -155,12 +155,12 @@ const baseTaskCatalog: Omit<TaskDefinition, "schedule" | "completionMode" | "min
   {
     id: "game-spot",
     category: "game",
-    title: "找不同",
-    shortTitle: "找不同",
+    title: "九九乘法表消消乐",
+    shortTitle: "乘法消消乐",
     points: 3,
     minutes: "5分钟",
     character: "hello-kitty",
-    summary: "比较两组图案，找出不同项。",
+    summary: "点击相邻且积相同的乘法算式配对消除，练习完整九九乘法表。",
   },
   {
     id: "game-logic",
@@ -806,9 +806,9 @@ export interface SudokuGameChallenge extends GameChallengeBase {
   options: number[];
 }
 
-export interface SpotGameChallenge extends GameChallengeBase {
-  kind: "spot";
-  tiles: string[];
+export interface MultiplicationMatchGameChallenge extends GameChallengeBase {
+  kind: "multiplication-match";
+  tiles: Array<{ expression: string; product: number }>;
 }
 
 export interface PatternGameChallenge extends GameChallengeBase {
@@ -817,7 +817,7 @@ export interface PatternGameChallenge extends GameChallengeBase {
   options: string[];
 }
 
-export type GameChallenge = ClassifyGameChallenge | CharacterComposeGameChallenge | SudokuGameChallenge | SpotGameChallenge | PatternGameChallenge;
+export type GameChallenge = ClassifyGameChallenge | CharacterComposeGameChallenge | SudokuGameChallenge | MultiplicationMatchGameChallenge | PatternGameChallenge;
 
 const hanziItems = [
   ["老师", "人物"], ["同学", "人物"], ["妈妈", "人物"], ["爸爸", "人物"], ["医生", "人物"],
@@ -864,10 +864,22 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "sudoku", question: `6×6数独第${index + 1}关：每行、每列和每个小宫都填入1到6`, grid, solution, options: [1, 2, 3, 4, 5, 6], answer: solution.join(",") };
   }),
   "game-spot": Array.from({ length: 40 }, (_, index) => {
-    const [same, different] = spotPairs[index % spotPairs.length];
-    const position = (index * 2 + Math.floor(index / spotPairs.length)) % 9;
-    const tiles = Array.from({ length: 9 }, (_, tileIndex) => tileIndex === position ? different : same);
-    return { kind: "spot", question: `九宫格第${index + 1}关：找出不同的图案`, tiles, answer: String(position) };
+    const pairs = Array.from({ length: 18 }, (_, pairIndex) => {
+      const left = ((index * 5 + pairIndex * 2) % 9) + 1;
+      const right = ((index * 7 + pairIndex * 4) % 9) + 1;
+      const expression = `${left} × ${right}`;
+      const reverseExpression = `${right} × ${left}`;
+      return pairIndex % 2 === 0
+        ? [{ expression, product: left * right }, { expression: reverseExpression, product: left * right }]
+        : [{ expression: reverseExpression, product: left * right }, { expression, product: left * right }];
+    });
+    const tiles = pairs.flat();
+    return {
+      kind: "multiplication-match",
+      question: `第${index + 1}关：配对相邻且积相同的乘法算式`,
+      tiles,
+      answer: tiles.map((tile) => tile.product).join(","),
+    };
   }),
   "game-logic": Array.from({ length: 40 }, (_, index) => {
     const symbols = ["★", "●", "▲", "◆", "♥", "☀", "■", "◇"];
@@ -886,12 +898,6 @@ export const gameQuestionBanks: Record<string, GameChallenge[]> = {
     return { kind: "pattern", question: `宝藏密码：找出第${index + 1}关问号里的图案`, sequence, options: [first, second, third], answer };
   }),
 };
-
-gameQuestionBanks["game-spot"] = gameQuestionBanks["game-spot"].map((challenge) => {
-  if (challenge.kind !== "spot") return challenge;
-  const sameTile = challenge.tiles.find((tile, index) => String(index) !== challenge.answer) ?? challenge.tiles[0];
-  return { ...challenge, tiles: [...challenge.tiles, ...Array.from({ length: 7 }, () => sameTile)] };
-});
 
 export const getGameChallenge = (taskId: string, value = new Date()) => {
   return getGameChallenges(taskId, value, 1)[0];

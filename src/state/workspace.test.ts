@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gameQuestionBanks, getDailyTaskIds, getGameChallenges, getStudySchedule, getWeeklyContent, sectionMeta, taskCatalog, weeklyContent, wordProblemAnswerMatches, wordProblems } from "../appData";
-import { generateArithmetic, petHotspotIsAvailable, petSceneHotspots } from "../App";
+import { generateArithmetic, isMultiplicationMatch, petHotspotIsAvailable, petSceneHotspots } from "../App";
 import {
   adjustPoints,
   advanceContentRound,
@@ -532,7 +532,7 @@ describe("practice content safeguards", () => {
     const expectedKinds = {
       "game-hanzi": "compose",
       "game-number": "sudoku",
-      "game-spot": "spot",
+      "game-spot": "multiplication-match",
       "game-logic": "pattern",
     } as const;
     for (const [taskId, bank] of Object.entries(gameQuestionBanks)) {
@@ -550,10 +550,14 @@ describe("practice content safeguards", () => {
           expect(challenge.grid.filter((value) => value === 0).length).toBeGreaterThanOrEqual(14);
           expect(challenge.options).toEqual([1, 2, 3, 4, 5, 6]);
           expect(challenge.answer).toBe(challenge.solution.join(","));
-        } else if (challenge.kind === "spot") {
-          expect(challenge.tiles.length).toBeGreaterThanOrEqual(9);
-          expect(Number(challenge.answer)).toBeGreaterThanOrEqual(0);
-          expect(Number(challenge.answer)).toBeLessThan(challenge.tiles.length);
+        } else if (challenge.kind === "multiplication-match") {
+          expect(challenge.tiles).toHaveLength(36);
+          expect(challenge.tiles.every((tile) => tile.product >= 1 && tile.product <= 81)).toBe(true);
+          for (let index = 0; index < challenge.tiles.length; index += 2) {
+            expect(challenge.tiles[index].product).toBe(challenge.tiles[index + 1].product);
+            expect(challenge.tiles[index].expression).toMatch(/^[1-9] × [1-9]$/);
+            expect(challenge.tiles[index + 1].expression).toMatch(/^[1-9] × [1-9]$/);
+          }
         } else if (challenge.kind === "pattern") {
           expect(challenge.sequence).toHaveLength(6);
           expect(challenge.sequence[4]).toBeNull();
@@ -579,6 +583,16 @@ describe("practice content safeguards", () => {
     const games = taskCatalog.filter((task) => task.category === "game");
     expect(games).toHaveLength(4);
     for (const game of games) expect(game.minimumScore).toBe(0);
+  });
+
+  it("only matches adjacent multiplication tiles with the same product", () => {
+    const tiles = [{ product: 12 }, { product: 12 }, { product: 12 }, { product: 15 }, { product: 12 }, { product: 12 }];
+
+    expect(isMultiplicationMatch(0, 1, tiles)).toBe(true);
+    expect(isMultiplicationMatch(1, 2, tiles)).toBe(true);
+    expect(isMultiplicationMatch(0, 2, tiles)).toBe(false);
+    expect(isMultiplicationMatch(2, 3, tiles)).toBe(false);
+    expect(isMultiplicationMatch(0, 6, tiles)).toBe(false);
   });
 
   it("provides 40 age-appropriate integer word problems", () => {

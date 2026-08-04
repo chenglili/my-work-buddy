@@ -1485,9 +1485,49 @@ function GameTask({ taskId, dateKey, masteredQuestionKeys, onProgress }: { taskI
 function GameRound({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: GameChallenge; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
   if (challenge.kind === "compose") return <div className="game-interaction compose-game"><div className="logic-clue"><img src={characterImages["my-melody"]} alt="" /><p>{challenge.question}</p></div><div className="compose-parts" aria-label="汉字部件"><span>{challenge.parts[0]}</span><b>+</b><span>{challenge.parts[1]}</span><b>=</b><span className="compose-missing">?</span></div><p className="compose-word">组词提示：{challenge.word}</p><div className="compose-options" role="group" aria-label="汉字候选答案">{challenge.options.map((option) => <button className={selected === option ? (correct ? "correct-choice" : "wrong-choice") : "secondary"} disabled={correct} key={option} onClick={() => onSubmit(option)}>{option}</button>)}</div></div>;
   if (challenge.kind === "sudoku") return <SudokuGame challenge={challenge} draftKey={draftKey} selected={selected} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
-  if (challenge.kind === "spot") return <div className="game-interaction spot-game"><p>{challenge.question}</p><div className="spot-grid" role="group" aria-label="找不同九宫格">{challenge.tiles.map((tile, index) => <button aria-label={`第${index + 1}格 ${tile}`} className={selected === String(index) ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={`${tile}-${index}`} onClick={() => onSubmit(String(index))}>{tile}</button>)}</div></div>;
+  if (challenge.kind === "multiplication-match") return <MultiplicationMatchGame challenge={challenge} draftKey={draftKey} correct={correct} onBegin={onBegin} onSubmit={onSubmit} />;
   if (challenge.kind === "pattern") return <div className="game-interaction pattern-game"><div className="logic-clue"><img src={characterImages.cinnamoroll} alt="" /><p>{challenge.question}</p></div><div className="pattern-sequence" aria-label="宝藏密码图案序列">{challenge.sequence.map((symbol, index) => <span className={symbol === null ? "missing" : ""} key={index}>{symbol ?? "?"}</span>)}</div><div className="pattern-options" role="group" aria-label="宝藏密码候选图案">{challenge.options.map((option) => <button className={selected === option ? (correct ? "correct-choice" : "wrong-choice") : ""} disabled={correct} key={option} onClick={() => onSubmit(option)}>{option}</button>)}</div></div>;
   return null;
+}
+
+export const isMultiplicationMatch = (first: number, second: number, tiles: Array<{ product: number }>) => {
+  const firstRow = Math.floor(first / 6);
+  const secondRow = Math.floor(second / 6);
+  const firstColumn = first % 6;
+  const secondColumn = second % 6;
+  return Math.abs(firstRow - secondRow) + Math.abs(firstColumn - secondColumn) === 1 && tiles[first]?.product === tiles[second]?.product;
+};
+
+function MultiplicationMatchGame({ challenge, draftKey, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "multiplication-match" }>; draftKey: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
+  const [cleared, setCleared] = usePracticeDraft<number[]>(`${draftKey}:cleared`, []);
+  const [activeCell, setActiveCell] = useState<number | null>(null);
+  const clearedSet = new Set(cleared);
+
+  const selectCell = (index: number) => {
+    if (correct || clearedSet.has(index)) return;
+    if (activeCell === null) {
+      onBegin();
+      setActiveCell(index);
+      return;
+    }
+    if (activeCell === index) {
+      setActiveCell(null);
+      return;
+    }
+    const isMatch = isMultiplicationMatch(activeCell, index, challenge.tiles);
+    if (!isMatch) {
+      setActiveCell(index);
+      onSubmit("__wrong__");
+      return;
+    }
+    const nextCleared = [...cleared, activeCell, index];
+    setCleared(nextCleared);
+    setActiveCell(null);
+    onBegin();
+    if (nextCleared.length === challenge.tiles.length) onSubmit(challenge.answer);
+  };
+
+  return <div className="game-interaction multiplication-match-game"><p>{challenge.question}</p><div className="multiplication-board" role="grid" aria-label="九九乘法表消消乐六乘六棋盘">{challenge.tiles.map((tile, index) => <button className={`${clearedSet.has(index) ? "multiplication-cleared" : ""} ${activeCell === index ? "multiplication-active" : ""}`} disabled={correct || clearedSet.has(index)} key={index} aria-label={`${index + 1}号算式 ${tile.expression}，积为${tile.product}`} onClick={() => selectCell(index)}>{clearedSet.has(index) ? "✓" : tile.expression}</button>)}</div><p className="multiplication-hint">先点击一个算式，再点击相邻且积相同的算式。</p></div>;
 }
 
 function SudokuGame({ challenge, draftKey, selected, correct, onBegin, onSubmit }: { challenge: Extract<GameChallenge, { kind: "sudoku" }>; draftKey: string; selected: string; correct: boolean; onBegin: () => void; onSubmit: (answer: string) => void }) {
