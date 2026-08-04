@@ -208,9 +208,10 @@ function usePracticeDraft<T>(key: string, initial: T) {
 }
 
 export const completedTaskIdsForToday = (state: WorkspaceState) => Array.from(new Set(
-  state.taskResults
-    .filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound)
-    .map((result) => result.taskId),
+  [
+    ...state.completedTaskIds,
+    ...state.taskResults.filter((result) => result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound).map((result) => result.taskId),
+  ],
 ));
 
 const formatDate = (value: string) => value.slice(5).replace("-", "/");

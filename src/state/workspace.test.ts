@@ -593,12 +593,11 @@ describe("practice content safeguards", () => {
     expect(allowsDirectCompletion(taskCatalog.find((task) => task.id === "chinese-morning-reading")!)).toBe(true);
   });
 
-  it("keeps completed game cards independent when stale task ids contain other games", () => {
+  it("restores locally completed game cards for today", () => {
     const today = day("2026-08-04");
-    const completed = completeTask(initialWorkspaceState(today), "game-spot", 3, [], {}, today);
-    const staleState = { ...completed, completedTaskIds: [...completed.completedTaskIds, "game-hanzi", "game-number"] };
+    const state = { ...initialWorkspaceState(today), completedTaskIds: ["game-spot"] };
 
-    expect(completedTaskIdsForToday(staleState)).toEqual(["game-spot"]);
+    expect(completedTaskIdsForToday(state)).toEqual(["game-spot"]);
   });
 
   it("matches an expression with its answer tile regardless of position", () => {
