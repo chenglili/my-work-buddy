@@ -226,9 +226,10 @@ describe("workspace state", () => {
     expect(migrated.notifiedDailyReadyDates).toEqual([]);
   });
 
-  it("calculates a streak from today or yesterday", () => {
+  it("counts all recorded check-in dates", () => {
     const dates = ["2026-07-28", "2026-07-29", "2026-07-30"];
     expect(calculateStreak(dates, day("2026-07-31"))).toBe(3);
+    expect(calculateStreak(["2026-07-28", "2026-07-30"], day("2026-07-31"))).toBe(2);
   });
 
   it("uses retained daily points when completed-date history is missing", () => {

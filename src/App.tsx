@@ -657,7 +657,7 @@ function TopBar({ points, progress, completedCount, requiredCount, streak, backL
         <span><Star size={18} />{points} 积分</span>
         <span><CheckCircle2 size={18} />{completedCount}/{requiredCount} 完成</span>
         <span>{progress}% 今日进度</span>
-        <span>{streak} 天连续打卡</span>
+        <span>{streak} 天累计打卡</span>
         <button className="content-refresh-button" type="button" title="切换新题并获得新一轮积分" aria-label="切换新题并获得新一轮积分" onClick={onAdvanceContent}><RefreshCw size={17} />更新新题 · {contentRound + 1}</button>
         {cloud.enabled ? <span className={`cloud-status ${cloud.syncStatus}`}>{cloud.syncStatus === "offline" ? <CloudOff size={17} /> : cloud.syncStatus === "syncing" ? <RefreshCw className="spin" size={17} /> : <Cloud size={17} />}{cloud.syncStatus === "synced" ? "已同步" : cloud.syncStatus === "syncing" ? "同步中" : cloud.syncStatus === "pending" ? "待同步" : "离线"}</span> : null}
       </div>
