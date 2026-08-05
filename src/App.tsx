@@ -58,6 +58,7 @@ import {
   approveTaskReview,
   cancelReward,
   calculateStreak,
+  completionDatesForState,
   completeTask,
   dailyParentPin,
   dateKey,
@@ -351,12 +352,13 @@ export default function App() {
 
   const currentDate = dateFromKey(state.dateKey);
   const previousDateKey = dateKey(new Date(currentDate.getTime() - 86_400_000));
-  const requiredTaskIds = getDailyTaskIds(currentDate, { previousDayCompleted: state.completedDates.includes(previousDateKey) });
+  const completionDates = completionDatesForState(state);
+  const requiredTaskIds = getDailyTaskIds(currentDate, { previousDayCompleted: completionDates.has(previousDateKey) });
   const completedTaskIds = completedTaskIdsForToday(state);
   const readyTaskIds = new Set([...completedTaskIds, ...state.pendingTaskReviews.filter((review) => review.dateKey === state.dateKey).map((review) => review.taskId), ...workspace.pendingTaskIds]);
   const completedRequired = requiredTaskIds.filter((id) => readyTaskIds.has(id)).length;
   const progress = Math.round((completedRequired / requiredTaskIds.length) * 100);
-  const streak = calculateStreak(state.completedDates, currentDate, state.dailyEarnedPoints);
+  const streak = calculateStreak([...completionDates], currentDate);
   const currentTask = route.taskId ? taskCatalog.find((task) => task.id === route.taskId) : undefined;
   const existingTaskResult = currentTask ? state.taskResults.find((result) => result.taskId === currentTask.id && result.dateKey === state.dateKey && (result.contentRound ?? 0) === state.contentRound) : undefined;
   const dailyReadyForNotification = isDailyReadyForNotification(state, requiredTaskIds);

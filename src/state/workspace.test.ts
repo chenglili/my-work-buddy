@@ -8,6 +8,7 @@ import {
   approveReward,
   approveTaskReview,
   calculateStreak,
+  completionDatesForState,
   cancelReward,
   completeTask,
   dailyParentPin,
@@ -265,6 +266,26 @@ describe("workspace state", () => {
     expect(getDailyReport(state, today).completedDays).toBe(1);
     expect(getWeeklyReport(state, today).completedDays).toBe(1);
     expect(getMonthlyReport(state, today).completedDays).toBe(1);
+  });
+
+  it("counts historical task-point dates when completed-date history is missing", () => {
+    const today = day("2026-08-03");
+    const state = {
+      ...initialWorkspaceState(today),
+      completedDates: [],
+      pointRecords: [{
+        id: "task-2026-08-03-math",
+        dateKey: "2026-08-03",
+        delta: 5,
+        reason: "task" as const,
+        sourceKey: "task:2026-08-03:math-arithmetic",
+        sourceId: "math-arithmetic",
+        createdAt: "2026-08-03T12:00:00.000Z",
+      }],
+    };
+
+    expect(completionDatesForState(state).has("2026-08-03")).toBe(true);
+    expect(getDailyReport(state, today).completedDays).toBe(1);
   });
 });
 

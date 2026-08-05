@@ -637,12 +637,16 @@ export const calculateStreak = (completedDates: string[], today = new Date(), da
   return streak;
 };
 
+export const completionDatesForState = (state: WorkspaceState) => new Set([
+  ...state.completedDates,
+  ...Object.entries(state.dailyEarnedPoints).filter(([, points]) => points > 0).map(([date]) => date),
+  ...state.pointRecords.filter((record) => record.reason === 'daily_bonus').map((record) => record.dateKey),
+  ...state.pointRecords.filter((record) => record.reason === 'task' && record.delta > 0).map((record) => record.dateKey),
+]);
+
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
 
-const fullCompletionDates = (state: WorkspaceState) => new Set([
-  ...state.completedDates,
-  ...state.pointRecords.filter((record) => record.reason === 'daily_bonus').map((record) => record.dateKey),
-]);
+const fullCompletionDates = (state: WorkspaceState) => completionDatesForState(state);
 
 const summarizeReport = (results: TaskResult[], completedDays: number, earnedPoints: number, rewardRequests: RewardRequest[]) => {
   const arithmeticResults = results.filter((result) => result.taskId === 'math-arithmetic' && (result.firstScore ?? result.score) !== undefined);
