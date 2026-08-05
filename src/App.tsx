@@ -1963,22 +1963,6 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     if (!next) setMessage("请输入正确口令和非零整数积分。");
     else { setState(next); setAdjustment(""); setMessage("积分调整完成。 "); }
   };
-  const backfillRecentCheckins = async () => {
-    if (!cloud.enabled) return;
-    const end = new Date(`${state.dateKey}T12:00:00`);
-    end.setDate(end.getDate() - 2);
-    const start = new Date(end);
-    start.setDate(start.getDate() - 2);
-    const remove = new Date(end);
-    remove.setDate(remove.getDate() + 1);
-    try {
-      await cloud.backfillRecentCheckins(dateKey(start), dateKey(end), dateKey(remove));
-      setMessage(`已修正为${dateKey(start)}至${dateKey(end)}的打卡记录，未计入${dateKey(remove)}，不增加积分。`);
-    } catch (backfillError) {
-      setMessage(backfillError instanceof Error ? backfillError.message : "补录打卡失败，请稍后重试。");
-    }
-  };
-
   const generatePairCode = async () => {
     try {
       const code = await cloud.createPairCode();
@@ -2068,7 +2052,6 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
             </section>
             <section className="parent-section"><h3>兑换审批</h3><div className="request-list">{state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").length ? state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").map((request) => <div className="request-row" key={request.id}><span><strong>{request.rewardName}</strong> · {request.cost}积分 · {request.status === "pending" ? "待批准" : "待兑现"}</span>{request.status === "pending" ? <div className="review-actions"><button className="secondary" onClick={() => void rejectExchange(request.id)}>驳回</button><button className="primary" onClick={() => void approve(request.id)}>批准兑换</button></div> : <button className="secondary" onClick={() => void fulfill(request.id)}>确认已兑现</button>}</div>) : <p className="muted">暂无待处理申请。</p>}</div></section>
             <div className="parent-dashboard">
-              {cloud.enabled && cloudParent ? <section className="parent-section"><h3>历史打卡修复</h3><p>修正为 8 月 1 日至 3 日的打卡日期，4 日不计入，不增加积分。</p><button className="secondary" onClick={() => void backfillRecentCheckins()}>修正历史打卡</button></section> : null}
               <section className="parent-section learning-report"><div className="report-heading"><h3><BarChart3 size={20} /> 学习报告总结</h3><div className="report-switch" role="tablist" aria-label="学习报告周期"><button className={reportPeriod === "day" ? "active" : ""} role="tab" aria-selected={reportPeriod === "day"} onClick={() => setReportPeriod("day")}>本日</button><button className={reportPeriod === "week" ? "active" : ""} role="tab" aria-selected={reportPeriod === "week"} onClick={() => setReportPeriod("week")}>本周</button><button className={reportPeriod === "month" ? "active" : ""} role="tab" aria-selected={reportPeriod === "month"} onClick={() => setReportPeriod("month")}>本月</button></div></div><div className="report-metrics"><div><span>完成任务</span><strong>{report.taskCount}项</strong></div><div><span>完整打卡</span><strong>{report.completedDays}天</strong></div><div><span>口算正确率</span><strong>{report.arithmeticAverage ? `${report.arithmeticAverage}%` : "暂无"}</strong></div><div><span>获得积分</span><strong>{report.earnedPoints}</strong></div></div><p className="report-summary">{getLearningReportSummary(reportPeriod, report)}</p><p className="report-wrong">主要错题：{report.wrongQuestions.length ? report.wrongQuestions.slice(0, 5).join("、") : "暂无记录"}</p></section>
               <section className="parent-section"><h3>调整积分</h3><p>用于家长补发奖励或修正记录，负数会扣减但不会低于0。</p><input value={adjustment} onChange={(event) => setAdjustment(event.target.value.replace(/[^\d-]/g, ""))} placeholder="例如 10 或 -5" /><button className="secondary" onClick={applyAdjustment}>确认调整</button></section>
             </div>

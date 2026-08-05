@@ -71,7 +71,6 @@ export interface CloudWorkspaceController {
   rejectReward(requestId: string): Promise<void>;
   fulfillReward(requestId: string): Promise<void>;
   adjustPoints(amount: number): Promise<void>;
-  backfillRecentCheckins(startDateKey: string, endDateKey: string, removeDateKey?: string): Promise<void>;
   purchasePetItem(itemId: PetItemId): Promise<void>;
   interactPet(action: PetAction, itemId: PetItemId): Promise<void>;
   createPairCode(): Promise<{ code: string; expiresAt: string }>;
