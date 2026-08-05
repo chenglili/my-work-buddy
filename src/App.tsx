@@ -1966,12 +1966,14 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
   const backfillRecentCheckins = async () => {
     if (!cloud.enabled) return;
     const end = new Date(`${state.dateKey}T12:00:00`);
-    end.setDate(end.getDate() - 1);
+    end.setDate(end.getDate() - 2);
     const start = new Date(end);
     start.setDate(start.getDate() - 2);
+    const remove = new Date(end);
+    remove.setDate(remove.getDate() + 1);
     try {
-      await cloud.backfillRecentCheckins(dateKey(start), dateKey(end));
-      setMessage(`已补录${dateKey(start)}至${dateKey(end)}的打卡记录，不增加积分。`);
+      await cloud.backfillRecentCheckins(dateKey(start), dateKey(end), dateKey(remove));
+      setMessage(`已修正为${dateKey(start)}至${dateKey(end)}的打卡记录，未计入${dateKey(remove)}，不增加积分。`);
     } catch (backfillError) {
       setMessage(backfillError instanceof Error ? backfillError.message : "补录打卡失败，请稍后重试。");
     }
@@ -2070,12 +2072,12 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
         <div className="parent-center">
           {!parentUnlocked ? <section className="parent-gate"><LockKeyhole size={30} /><div><h3>家长验证</h3><p>请输入今日四位家长口令，验证后即可审核学习、处理兑换和调整积分。</p><div className="parent-unlock-row"><input className="pin-input" aria-label="家长口令" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="今日四位口令" /><button className="primary" disabled={pin.length !== 4} onClick={unlockParent}>进入家长中心</button></div></div></section> : <>
             <section className="parent-section learning-review-section">
-              <div className="parent-section-head"><div><p className="eyebrow">批准后才会发放对应积分</p><h3>今日学习审核 · {state.pendingTaskReviews.length}项待审</h3></div><div className="inline-actions"><button className="primary" disabled={!state.pendingTaskReviews.length} onClick={() => void approveAllLearning()}>一键批准全部</button><button className="secondary" onClick={lockParent}>{cloud.enabled ? "返回奖励货架" : "退出家长中心"}</button>{cloud.enabled && cloudParent ? <button className="secondary" onClick={() => void cloud.signOut()}><LogOut size={17} />退出云端账号</button> : null}</div></div>
+              <div className="parent-section-head"><div><p className="eyebrow">批准后才会发放对应积分</p><h3>今日学习审核 · {state.pendingTaskReviews.length}项待审</h3></div><div className="inline-actions"><button className="primary" disabled={!state.pendingTaskReviews.length} onClick={() => void approveAllLearning()}>一键批准全部</button>{cloud.enabled && cloudParent ? <button className="secondary" onClick={() => void cloud.signOut()}><LogOut size={17} />退出云端账号</button> : null}</div></div>
               <div className="learning-review-list">{state.pendingTaskReviews.length ? state.pendingTaskReviews.map((review) => <div className="learning-review-row" key={review.id}><div><strong>{review.taskTitle}</strong><p>{formatTaskReviewEvidence(review)} · 提交于{new Date(review.submittedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</p><span>批准后 +{review.points}积分</span></div><div className="review-actions"><button className="secondary" onClick={() => rejectLearning(review.id)}>退回重做</button><button className="primary" onClick={() => approveLearning(review.id)}>批准 +{review.points}</button></div></div>) : <div className="empty-record"><img src={characterImages.cinnamoroll} alt="" /><p>今天没有待审核任务。自动判分题达标后会直接发积分。</p></div>}</div>
             </section>
             <section className="parent-section"><h3>兑换审批</h3><div className="request-list">{state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").length ? state.rewardRequests.filter((request) => request.status === "pending" || request.status === "approved").map((request) => <div className="request-row" key={request.id}><span><strong>{request.rewardName}</strong> · {request.cost}积分 · {request.status === "pending" ? "待批准" : "待兑现"}</span>{request.status === "pending" ? <div className="review-actions"><button className="secondary" onClick={() => void rejectExchange(request.id)}>驳回</button><button className="primary" onClick={() => void approve(request.id)}>批准兑换</button></div> : <button className="secondary" onClick={() => void fulfill(request.id)}>确认已兑现</button>}</div>) : <p className="muted">暂无待处理申请。</p>}</div></section>
             <div className="parent-dashboard">
-              {cloud.enabled && cloudParent ? <section className="parent-section"><h3>历史打卡修复</h3><p>补录过去3天的打卡日期，不增加积分。</p><button className="secondary" onClick={() => void backfillRecentCheckins()}>补录过去3天</button></section> : null}
+              {cloud.enabled && cloudParent ? <section className="parent-section"><h3>历史打卡修复</h3><p>修正为 8 月 1 日至 3 日的打卡日期，4 日不计入，不增加积分。</p><button className="secondary" onClick={() => void backfillRecentCheckins()}>修正历史打卡</button></section> : null}
               <section className="parent-section learning-report"><div className="report-heading"><h3><BarChart3 size={20} /> 学习报告总结</h3><div className="report-switch" role="tablist" aria-label="学习报告周期"><button className={reportPeriod === "day" ? "active" : ""} role="tab" aria-selected={reportPeriod === "day"} onClick={() => setReportPeriod("day")}>本日</button><button className={reportPeriod === "week" ? "active" : ""} role="tab" aria-selected={reportPeriod === "week"} onClick={() => setReportPeriod("week")}>本周</button><button className={reportPeriod === "month" ? "active" : ""} role="tab" aria-selected={reportPeriod === "month"} onClick={() => setReportPeriod("month")}>本月</button></div></div><div className="report-metrics"><div><span>完成任务</span><strong>{report.taskCount}项</strong></div><div><span>完整打卡</span><strong>{report.completedDays}天</strong></div><div><span>口算正确率</span><strong>{report.arithmeticAverage ? `${report.arithmeticAverage}%` : "暂无"}</strong></div><div><span>获得积分</span><strong>{report.earnedPoints}</strong></div></div><p className="report-summary">{getLearningReportSummary(reportPeriod, report)}</p><p className="report-wrong">主要错题：{report.wrongQuestions.length ? report.wrongQuestions.slice(0, 5).join("、") : "暂无记录"}</p></section>
               <section className="parent-section"><h3>调整积分</h3><p>用于家长补发奖励或修正记录，负数会扣减但不会低于0。</p><input value={adjustment} onChange={(event) => setAdjustment(event.target.value.replace(/[^\d-]/g, ""))} placeholder="例如 10 或 -5" /><button className="secondary" onClick={applyAdjustment}>确认调整</button></section>
             </div>
