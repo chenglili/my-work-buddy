@@ -119,6 +119,7 @@ describe("workspace state", () => {
 
     expect(duplicate.points).toBe(5);
     expect(duplicate.taskResults).toHaveLength(1);
+    expect(duplicate.completedDates).toEqual(["2026-07-31"]);
     expect(finished.points).toBe(26);
     expect(finished.completedDates).toEqual(["2026-07-31"]);
     expect(finished.weeklyPoints["2026-07-27"]).toBe(26);
@@ -183,6 +184,7 @@ describe("workspace state", () => {
     const completed = completeTask(initialWorkspaceState(today), "math-arithmetic", 5, requiredTaskIds, { score: 90 }, today);
     const withEnglish = submitTaskReview(completed, { id: "english-daily", title: "英语每日听读任务", points: 6 }, {}, today);
 
+    expect(withEnglish.completedDates).toEqual(["2026-08-01"]);
     expect(isDailyReadyForNotification(withEnglish, requiredTaskIds)).toBe(false);
 
     const ready = submitTaskReview(withEnglish, { id: "sport-hour", title: "每日运动总目标", points: 6 }, {}, today);

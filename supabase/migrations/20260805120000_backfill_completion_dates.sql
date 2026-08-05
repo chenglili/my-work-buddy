@@ -30,7 +30,7 @@ begin
     union
     select date_key
     from public.task_records
-    where child_id = v_child and status = 'completed'
+    where child_id = v_child and status in ('pending_review', 'completed')
   ) dates;
 
   return jsonb_set(v_response, '{state,completedDates}', v_dates, true);

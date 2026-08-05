@@ -409,9 +409,7 @@ export const completeTask = (
     points: freshState.points + awardedPoints,
     completedTaskIds,
     bonusAwarded: freshState.bonusAwarded || shouldAwardBonus,
-    completedDates: shouldAwardBonus
-      ? Array.from(new Set([...freshState.completedDates, todayKey])).sort()
-      : freshState.completedDates,
+    completedDates: Array.from(new Set([...freshState.completedDates, todayKey])).sort(),
     taskResults: [...freshState.taskResults, taskResult],
     pointRecords: appendPointRecords(freshState, pointRecords),
     masteredQuestionKeys: Array.from(new Set([...freshState.masteredQuestionKeys, ...(result.correctQuestions ?? [])])),
@@ -438,6 +436,7 @@ export const submitTaskReview = (
 
   return {
     ...freshState,
+    completedDates: Array.from(new Set([...freshState.completedDates, freshState.dateKey])).sort(),
     pendingTaskReviews: [...freshState.pendingTaskReviews, {
       id: `${freshState.dateKey}-${round}-${task.id}`,
       taskId: task.id,
@@ -643,6 +642,7 @@ export const completionDatesForState = (state: WorkspaceState) => new Set([
   ...state.pointRecords.filter((record) => record.reason === 'daily_bonus').map((record) => record.dateKey),
   ...state.pointRecords.filter((record) => record.reason === 'task' && record.delta > 0).map((record) => record.dateKey),
   ...state.taskResults.map((result) => result.dateKey),
+  ...state.pendingTaskReviews.map((review) => review.dateKey),
 ]);
 
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
