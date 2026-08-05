@@ -14,6 +14,7 @@ declare
 begin
   if v_child is null then raise exception 'family membership required'; end if;
 
+  -- The base workspace response preserves the {state,pet} payload contract.
   select coalesce(jsonb_agg(date_key::text order by date_key), '[]'::jsonb)
   into v_dates
   from (
