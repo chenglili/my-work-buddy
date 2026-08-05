@@ -1979,15 +1979,6 @@ function ShopPage({ state, setState, streak, requiredTaskIds, parentSession, set
     }
   };
 
-  const lockParent = () => {
-    if (cloud.enabled) {
-      setShopTab("rewards");
-      return;
-    }
-    setParentSession(null);
-    setPin("");
-  };
-
   const generatePairCode = async () => {
     try {
       const code = await cloud.createPairCode();
