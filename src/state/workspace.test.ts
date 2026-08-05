@@ -287,6 +287,25 @@ describe("workspace state", () => {
     expect(completionDatesForState(state).has("2026-08-03")).toBe(true);
     expect(getDailyReport(state, today).completedDays).toBe(1);
   });
+
+  it("counts completed task-result dates when point history is missing", () => {
+    const today = day("2026-08-03");
+    const state = {
+      ...initialWorkspaceState(today),
+      completedDates: [],
+      taskResults: [{
+        taskId: "math-arithmetic",
+        dateKey: "2026-08-03",
+        durationSeconds: 60,
+        attempts: 1,
+        wrongQuestions: [],
+        completedAt: "2026-08-03T12:00:00.000Z",
+      }],
+    };
+
+    expect(completionDatesForState(state).has("2026-08-03")).toBe(true);
+    expect(getDailyReport(state, today).completedDays).toBe(1);
+  });
 });
 
 describe("pet care", () => {

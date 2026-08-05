@@ -642,6 +642,7 @@ export const completionDatesForState = (state: WorkspaceState) => new Set([
   ...Object.entries(state.dailyEarnedPoints).filter(([, points]) => points > 0).map(([date]) => date),
   ...state.pointRecords.filter((record) => record.reason === 'daily_bonus').map((record) => record.dateKey),
   ...state.pointRecords.filter((record) => record.reason === 'task' && record.delta > 0).map((record) => record.dateKey),
+  ...state.taskResults.map((result) => result.dateKey),
 ]);
 
 export const unlockedBadges = (streak: number) => [7, 14, 30].filter((days) => streak >= days);
