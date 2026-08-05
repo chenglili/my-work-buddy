@@ -578,6 +578,14 @@ export const useCloudWorkspace = (): CloudWorkspaceController => {
     rejectReward: (requestId) => runMutation("reject_reward", { p_request_id: requestId }),
     fulfillReward: (requestId) => runMutation("fulfill_reward", { p_request_id: requestId }),
     adjustPoints: (amount) => runMutation("adjust_points", { p_amount: amount }),
+    backfillRecentCheckins: async (startDateKey, endDateKey) => {
+      const session = sessionRef.current;
+      if (!supabase || !session) throw new Error("璇峰厛鐧诲綍鎴栭厤瀵硅澶囥€?");
+      setSyncStatus("syncing");
+      const { data, error: rpcError } = await supabase.rpc("backfill_recent_checkins", { p_start: startDateKey, p_end: endDateKey });
+      if (rpcError) { setSyncStatus("synced"); throw rpcError; }
+      await applyPayload(session.user.id, data);
+    },
     purchasePetItem: (itemId: PetItemId) => runMutation("purchase_pet_item", { p_item_id: itemId }),
     interactPet: (action: PetAction, itemId: PetItemId) => runMutation("interact_pet", { p_action: action, p_item_id: itemId }),
     createPairCode,
